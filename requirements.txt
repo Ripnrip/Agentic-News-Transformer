@@ -1,0 +1,10 @@
+pydantic
+pylint
+selenium>=4.6.0
+pygooglenews
+requests
+cohere
+chromadb
+python-dotenv
+crawl4ai
+openai
