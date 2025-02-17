@@ -4,6 +4,7 @@ import os
 import json
 from datetime import datetime
 import argparse
+from database_agent import DatabaseAgent
 
 def log_article_details(articles, parsed_content):
     """Log detailed information about articles and their parsed content."""
@@ -47,7 +48,7 @@ def main():
     # Fetch from sources
     #google_ai_news = agent.fetch_ai_news_from_google()
     #newsapi_articles = newsapi_client.fetch_ai_news(days_back=7, limit=10)
-    newsdatahub_articles = newsdatahub_client.fetch_ai_news(days_back=7, limit=10)
+    newsdatahub_articles = newsdatahub_client.fetch_ai_news(days_back=7, limit=5)
     
     # Combine results
     #all_articles = newsapi_articles + newsdatahub_articles
@@ -78,6 +79,20 @@ def main():
         print("\nFailed Articles:")
         for failed in parsing_results['failed']:
             print(f"- {failed['title']}: {failed['error']}")
+    
+    # Initialize database agent
+    db_agent = DatabaseAgent()
+    
+    # Store articles
+    db_agent.store_articles(all_articles)
+    
+    # Example search
+    similar_articles = db_agent.search_similar("Latest developments in AI and machine learning")
+    print("\nSimilar Articles:")
+    for result in similar_articles:
+        print(f"\nTitle: {result['article']['title']}")
+        print(f"Score: {result['similarity_score']:.2f}")
+        print(f"Matching chunk: {result['chunk'][:200]}...")
     
     # Store in vector database
     vector_store = NewsVectorStore(cohere_api_key=os.getenv("COHERE_API_KEY"))
