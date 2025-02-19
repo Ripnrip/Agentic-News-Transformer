@@ -10,7 +10,7 @@ from elevenlabs.client import ElevenLabs
 class AudioGenerationAgent:
     """Agent for converting blog content to audio and subtitles."""
     
-    def __init__(self, voice_id: str = "WoVCRPuLSDMkhGy0WO01"):
+    def __init__(self, voice_id: str = "21m00Tcm4TlvDq8ikWAM"):
         """Initialize with ElevenLabs configuration."""
         self.voice_id = voice_id
         self.client = ElevenLabs(

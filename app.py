@@ -1,0 +1,143 @@
+import streamlit as st
+import os
+from database_agent import DatabaseAgent
+from content_generator import ContentGenerationAgent
+from audio_generator import AudioGenerationAgent
+from models import NewsArticle, ArticleContent
+from datetime import datetime
+import json
+
+# Initialize agents
+db_agent = DatabaseAgent()
+content_agent = ContentGenerationAgent(db_agent)
+audio_agent = AudioGenerationAgent()
+
+# Available ElevenLabs voices
+VOICES = {
+    "Rachel": "21m00Tcm4TlvDq8ikWAM",
+    "Domi": "AZnzlk1XvdvUeBnXmlld",
+    "Bella": "EXAVITQu4vr4xnSDxMaL",
+    "Antoni": "ErXwobaYiN019PkySvjV",
+    "Elli": "MF3mGyEYCl7XYWbV9V6O",
+    "Josh": "TxGEqnHWrfWFTfGW9XjX",
+    "Arnold": "VR6AewLTigWG4xSOukaG",
+    "Adam": "pNInz6obpgDQGcFmaJgB",
+    "Sam": "yoZ06aMxZJJ28mfd3POQ",
+}
+
+def main():
+    st.title("AI News Content Generator")
+    
+    # Sidebar for configuration
+    st.sidebar.header("Configuration")
+    selected_voice = st.sidebar.selectbox(
+        "Select Voice",
+        list(VOICES.keys()),
+        index=0
+    )
+    
+    # Main content area
+    st.header("Enter News Sources")
+    
+    # URL input
+    urls = st.text_area(
+        "Enter URLs (one per line)",
+        height=150,
+        help="Enter the URLs of news articles you want to process"
+    )
+    
+    if st.button("Generate Content"):
+        if urls:
+            url_list = [url.strip() for url in urls.split('\n') if url.strip()]
+            
+            with st.spinner("Processing articles..."):
+                # Create articles from URLs
+                articles = []
+                for url in url_list:
+                    st.write(f"Processing: {url}")
+                    try:
+                        # Use NewsSearchAgent to parse article
+                        parsed = db_agent._parse_article(url)
+                        if parsed and parsed.get('text'):
+                            article = NewsArticle(
+                                title=parsed.get('title', 'Untitled'),
+                                link=url,
+                                content=ArticleContent(
+                                    text=parsed['text'],
+                                    html=parsed.get('html', ''),
+                                    markdown=parsed.get('markdown', '')
+                                ),
+                                source="user_input",
+                                source_type="newsapi",
+                                published_date=datetime.now()
+                            )
+                            articles.append(article)
+                            st.success(f"Successfully processed: {url}")
+                        else:
+                            st.error(f"Could not extract content from: {url}")
+                    except Exception as e:
+                        st.error(f"Error processing {url}: {str(e)}")
+                
+                if articles:
+                    # Store articles
+                    db_agent.store_articles(articles)
+                    st.success(f"Stored {len(articles)} articles")
+                    
+                    # Generate content
+                    article = content_agent.generate_article("AI Technology News")
+                    
+                    # Display generated content
+                    st.header("Generated Content")
+                    st.subheader(article['headline'])
+                    st.write(article['intro'])
+                    st.write(article['body'])
+                    st.write(article['conclusion'])
+                    
+                    # Generate audio with selected voice
+                    with st.spinner("Generating audio..."):
+                        audio_agent.voice_id = VOICES[selected_voice]
+                        audio_content = audio_agent.generate_audio_content(article, content_agent.client)
+                        
+                        # Display audio and transcripts
+                        st.header("Audio Content")
+                        st.audio(audio_content['audio_file'])
+                        
+                        with st.expander("View Script"):
+                            st.text(audio_content['script'])
+                            
+                        with st.expander("View Subtitles"):
+                            st.text(open(audio_content['srt_file']).read())
+                        
+                        # Save results
+                        results = {
+                            "article": article,
+                            "audio": {
+                                "file": audio_content['audio_file'],
+                                "script": audio_content['script_file'],
+                                "srt": audio_content['srt_file'],
+                                "voice": selected_voice
+                            },
+                            "metadata": {
+                                "generated_date": datetime.now().isoformat(),
+                                "source_urls": url_list
+                            }
+                        }
+                        
+                        # Save to file
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        output_file = f"generated_content/content_{timestamp}.json"
+                        os.makedirs("generated_content", exist_ok=True)
+                        with open(output_file, 'w') as f:
+                            json.dump(results, f, indent=2)
+                            
+                        st.download_button(
+                            "Download Results",
+                            json.dumps(results, indent=2),
+                            file_name=f"content_{timestamp}.json",
+                            mime="application/json"
+                        )
+        else:
+            st.error("Please enter at least one URL")
+
+if __name__ == "__main__":
+    main() 

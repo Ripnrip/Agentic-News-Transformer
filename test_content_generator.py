@@ -86,5 +86,5 @@ def test_audio_from_existing():
         print(f"Estimated duration: {audio_content['duration']:.1f} seconds")
 
 if __name__ == "__main__":
-    # test_content_generation()  # Comment out original test
+    #test_content_generation()  # Comment out original test
     test_audio_from_existing()  # Run audio generation only 

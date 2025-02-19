@@ -1,0 +1,71 @@
+1
+00:00:00,000 --> 00:00:09,600
+[Anchor]: Good evening, everyone! Prepare to be intrigued as we delve into the fascinating world of artificial intelligence, or AI, and machine learning. We're
+
+2
+00:00:09,600 --> 00:00:19,200
+talking about how AI is transforming our lives, from revamping the way we make payments to refining the stories we consume daily. But, like
+
+3
+00:00:19,200 --> 00:00:28,800
+everything in life, there are cautionary tales as well. So, hang tight as we also discuss a recent health revelation about a popular artificial
+
+4
+00:00:28,800 --> 00:00:38,400
+sweetener. [Anchor]: First, let's talk about a new buzz in the tech corridors of Google Pay. Picture this: making payments just by the sound
+
+5
+00:00:38,400 --> 00:00:41,200
+of your voice. Fascinating, isn't it? [PAUSE]
+
+6
+00:00:41,200 --> 00:00:50,800
+The technology behind this is a blend of complex AI and machine learning algorithms, diligently working together to recognize and process voice commands. This
+
+7
+00:00:50,800 --> 00:01:00,400
+could be the onset of a new era where AI and our daily transactions mingle, making payments swifter, smoother, and more intuitive than ever
+
+8
+00:01:00,400 --> 00:01:10,000
+before. [Anchor]: But the magic of AI doesn't end there. The New York Times, a pillar of journalism, is also tapping into the allure
+
+9
+00:01:10,000 --> 00:01:14,800
+of AI. They've introduced AI-powered tools to assist with editing stories. [PAUSE]
+
+10
+00:01:14,800 --> 00:01:24,400
+The AI tools scrutinize the text, suggest edits, and even check grammar. It’s like having an indefatigable personal editor, tirelessly working to ensure every
+
+11
+00:01:24,400 --> 00:01:34,000
+story is flawless. But rest assured, this doesn't mean the human touch will be replaced. Instead, it allows journalists to concentrate on crafting engaging
+
+12
+00:01:34,000 --> 00:01:43,600
+narratives while AI handles the rest. [Anchor]: However, every story has its twists and turns. A recent study from Sweden cautions about a popular
+
+13
+00:01:43,600 --> 00:01:53,200
+artificial sweetener that might not be as sweet as it appears. This sweetener, often marketed as a healthier option, has been linked to an
+
+14
+00:01:53,200 --> 00:02:02,800
+increased risk of heart attack and stroke. So, while we embrace the advancements of AI and machine learning, it's crucial not to overlook our
+
+15
+00:02:02,800 --> 00:02:12,400
+health, both literally and metaphorically. [Anchor]: As we conclude our journey through the AI landscape, we're left with a sense of awe. AI is
+
+16
+00:02:12,400 --> 00:02:22,000
+indeed transforming our lives, making payments and journalism more efficient and thrilling. But, like with anything new, we need to proceed with caution, balancing
+
+17
+00:02:22,000 --> 00:02:31,600
+the advantages with potential risks. So, let's keep exploring this captivating world of technology, but always with our wellbeing in mind. Until next time,
+
+18
+00:02:31,600 --> 00:02:34,800
+folks, stay fascinated by the world of AI!

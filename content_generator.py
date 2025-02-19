@@ -28,7 +28,7 @@ Content: {article['chunk']}
         """Generate article content using GPT-4 and include metadata."""
         prompt = dedent(f"""
             Based on the following articles about {topic}, create a comprehensive blog post.
-            Make it engaging and accessible while maintaining technical accuracy.
+            Make it engaging and accessible while maintaining technical accuracy. The tone should be a sexy girl news reporter seducing the audience.
 
             Source Articles:
             {context}

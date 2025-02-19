@@ -14,4 +14,5 @@ langchain-community>=0.1.0
 langchain-cohere>=0.1.0
 tiktoken>=0.5.2  # Required for text splitting
 langchain-text-splitters>=0.3.6  # Updated package name and version
-elevenlabs>=1.51.0 
+elevenlabs>=1.51.0
+streamlit

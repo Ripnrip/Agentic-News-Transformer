@@ -1,0 +1,87 @@
+1
+00:00:00,000 --> 00:00:09,600
+[SPEAKER 1] Good evening, and welcome to our segment on the future of technology. We're going to be talking about the sweet and sour
+
+2
+00:00:09,600 --> 00:00:19,200
+of Artificial Intelligence - the fascinating world where technology not just assists, but autonomously acts. Today we'll be discussing The New York Times' use
+
+3
+00:00:19,200 --> 00:00:28,800
+of AI to edit stories, Google Pay's plans for voice-commanded UPI payments, and a surprising new study about artificial sweeteners. So, sit back, relax,
+
+4
+00:00:28,800 --> 00:00:32,400
+and let's dive into this tech-filled journey. Ready? [PAUSE]
+
+5
+00:00:32,400 --> 00:00:42,000
+[SPEAKER 1] Let's kick things off with a little spice - The New York Times. They've stepped up their game by introducing AI tools
+
+6
+00:00:42,000 --> 00:00:51,600
+to streamline their editing process. The goal here is to focus more on creating engaging content while the AI handles the tedious details. Isn't
+
+7
+00:00:51,600 --> 00:01:01,200
+that impressive? [SPEAKER 2] Absolutely, it's a game-changing approach. But the question is, what does this mean for the future of journalism? With AI
+
+8
+00:01:01,200 --> 00:01:10,800
+playing a potential role in not just editing, but also content creation, the possibilities are intriguing. [SPEAKER 1] Stay tuned to see how this
+
+9
+00:01:10,800 --> 00:01:13,600
+relationship between AI and journalism evolves. [PAUSE]
+
+10
+00:01:13,600 --> 00:01:23,200
+[SPEAKER 1] Next, we bring you an exciting scoop from Google Pay. They're set to revolutionize the digital payment landscape with AI-powered voice commands
+
+11
+00:01:23,200 --> 00:01:32,800
+for UPI payments. Imagine just whispering your command, and Google Pay does the rest. It's like having your own personal financial assistant, always at
+
+12
+00:01:32,800 --> 00:01:42,400
+your service. [SPEAKER 2] That's not just cool, it's a significant move towards making technology more accessible and inclusive. [SPEAKER 1] Now, we're shifting
+
+13
+00:01:42,400 --> 00:01:52,000
+gears to a slightly bitter note. A recent study from Sweden has revealed that a popular artificial sweetener can increase the risk of heart
+
+14
+00:01:52,000 --> 00:02:01,600
+attacks and strokes. We often turn to such alternatives as a healthier choice to sugar, but it seems we need to be more cautious.
+
+15
+00:02:01,600 --> 00:02:07,600
+[SPEAKER 2] Indeed, this finding underscores the need for more research and better alternatives. [PAUSE]
+
+16
+00:02:07,600 --> 00:02:17,200
+[SPEAKER 1] So, there you have it, the sweet and sour of AI in our lives today. From enhancing news stories and facilitating voice-powered
+
+17
+00:02:17,200 --> 00:02:26,800
+payments to revealing health risks, AI continues to surprise us. [SPEAKER 2] In the end, it's clear that AI is not just a trend
+
+18
+00:02:26,800 --> 00:02:36,400
+but a significant part of our future. It's making tasks easier and more efficient, while also uncovering new information and insights. But as with
+
+19
+00:02:36,400 --> 00:02:46,000
+all good things, it comes with its own set of challenges. [SPEAKER 1] Absolutely, it's up to us to navigate this exciting yet complex
+
+20
+00:02:46,000 --> 00:02:55,600
+landscape, making the most out of the sweet while being mindful of the sour. So, keep exploring, keep questioning, and most importantly, keep enjoying
+
+21
+00:02:55,600 --> 00:03:05,200
+the ride. [SPEAKER 2] Thanks for joining us on this journey into the realm of AI. Stay tuned for more exciting news from the
+
+22
+00:03:05,200 --> 00:03:06,400
+tech world. Goodnight!
