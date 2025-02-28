@@ -8,11 +8,12 @@ chromadb>=0.4.22
 python-dotenv
 crawl4ai
 openai
+tiktoken>=0.5.2
+elevenlabs>=1.51.0
+streamlit
+
+# Langchain packages with compatible versions
 langchain>=0.1.0
 langchain-core>=0.1.0
 langchain-community>=0.1.0
 langchain-cohere>=0.1.0
-tiktoken>=0.5.2  # Required for text splitting
-langchain-text-splitters>=0.3.6  # Updated package name and version
-elevenlabs>=1.51.0
-streamlit

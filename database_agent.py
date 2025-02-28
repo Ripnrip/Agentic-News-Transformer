@@ -6,9 +6,9 @@ import json
 import os
 from datetime import datetime
 
-from langchain_text_splitters.character import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores.chroma import Chroma
-from langchain_cohere.embeddings import CohereEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings.cohere import CohereEmbeddings
 from models import NewsArticle, ArticleContent
 from langchain_community.vectorstores.utils import filter_complex_metadata
 
