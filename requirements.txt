@@ -22,3 +22,11 @@ langchain-cohere>=0.1.0
 tweepy>=4.14.0  # For Twitter/X
 facebook-sdk>=3.1.0  # For Facebook
 linkedin-api>=2.0.0a  # For LinkedIn
+
+# Avatar generation dependencies
+opencv-python>=4.5.0
+numpy>=1.19.0
+librosa>=0.8.0
+
+# Pydantic AI for agent framework
+pydantic-ai>=0.0.30

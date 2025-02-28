@@ -7,11 +7,13 @@ from models import NewsArticle, ArticleContent
 from datetime import datetime, timedelta
 import json
 from social_media_agent import SocialMediaAgent
+from avatar_generator import AvatarGenerationAgent
 
 # Initialize agents
 db_agent = DatabaseAgent()
 content_agent = ContentGenerationAgent(db_agent)
 audio_agent = AudioGenerationAgent()
+avatar_agent = AvatarGenerationAgent()
 social_agent = SocialMediaAgent()
 
 # Available ElevenLabs voices
@@ -37,6 +39,24 @@ def main():
         list(VOICES.keys()),
         index=0
     )
+    
+    # After voice selection in sidebar
+    st.sidebar.header("Avatar Options")
+    use_avatar = st.sidebar.checkbox("Generate Avatar Video", value=False)
+    
+    if use_avatar:
+        avatar_available = len(avatar_agent.get_available_avatars()) > 0
+        if avatar_available:
+            enhancement = st.sidebar.checkbox("Enhance Face", value=True)
+            resolution = st.sidebar.selectbox(
+                "Video Resolution",
+                options=["full", "half", "quarter"],
+                index=0
+            )
+        else:
+            st.sidebar.warning(
+                "Avatar template not found. Add default_avatar.mp4 to the 'avatars' directory."
+            )
     
     # Main content area
     st.header("Enter News Sources")
@@ -223,6 +243,32 @@ def main():
                                     st.success(f"Posted to {platform}! Post ID: {result.get('post_id')}")
                                 else:
                                     st.error(f"Failed to post to {platform}: {result.get('error')}")
+
+                # Generate avatar video if requested
+                if use_avatar and 'audio_content' in locals() and avatar_available:
+                    with st.spinner("Generating avatar video..."):
+                        try:
+                            video_file = avatar_agent.generate_video(
+                                audio_file=audio_content['audio_file'],
+                                resolution=resolution,
+                                enhance_face=enhancement
+                            )
+                            
+                            # Display the video
+                            st.header("Avatar Video")
+                            st.video(video_file)
+                            
+                            # Include video in results
+                            results["video"] = {
+                                "file": video_file,
+                            }
+                            
+                            # Add video to social media files
+                            media_files = {
+                                platform: [video_file] for platform in platforms
+                            }
+                        except Exception as e:
+                            st.error(f"Error generating avatar video: {str(e)}")
         else:
             st.error("Please enter at least one URL")
 
