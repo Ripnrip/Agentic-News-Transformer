@@ -1,269 +1,282 @@
-"""Database agent for storing and retrieving news articles."""
-from typing import List, Dict, Any
+"""Database agent for storing and retrieving news articles using Pydantic AI."""
 import sqlite3
 import hashlib
 import json
 import os
+from typing import List, Dict, Any, Optional
 from datetime import datetime
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent, RunContext
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.cohere import CohereEmbeddings
-from models import NewsArticle, ArticleContent
-from langchain_community.vectorstores.utils import filter_complex_metadata
 
-class DatabaseAgent:
-    """Agent for managing SQLite and vector storage of news articles."""
+# Define model types
+class ArticleContent(BaseModel):
+    """Model for article content with different formats."""
+    text: str = ''
+    html: str = ''
+    markdown: str = ''
+
+class NewsArticle(BaseModel):
+    """Model representing a news article."""
+    title: str
+    link: str
+    content: ArticleContent = Field(default_factory=ArticleContent)
+    source: Optional[str] = None
+    source_type: str = "web"
+    published_date: Optional[datetime] = None
+    engagement: Optional[Dict[str, int]] = None
+    author: Optional[str] = None
+    image_url: Optional[str] = None
+
+class SearchQuery(BaseModel):
+    """Model for search queries."""
+    query: str
+    limit: int = 5
+    min_similarity: float = 0.7
+
+class SearchResult(BaseModel):
+    """Model for search results."""
+    article: NewsArticle
+    chunk: str
+    similarity_score: float
+
+class StoreResult(BaseModel):
+    """Result of storing articles."""
+    stored_count: int
+    skipped_count: int
+    errors: List[str] = Field(default_factory=list)
+
+# Create the agent
+db_agent = Agent(
+    "openai:gpt-4o",
+    deps_type=Any,
+    result_type=Any,
+    system_prompt="Manage database operations for storing and retrieving news articles."
+)
+
+# Default paths
+SQLITE_PATH = "news.db"
+VECTOR_PATH = "vectorstore"
+
+# Initialize embeddings
+embeddings = CohereEmbeddings(
+    model="embed-english-v3.0",
+    cohere_api_key=os.getenv('COHERE_API_KEY')
+)
+
+# Initialize vector store
+vectorstore = Chroma(
+    persist_directory=VECTOR_PATH,
+    embedding_function=embeddings
+)
+
+# Initialize SQLite
+def _init_sqlite():
+    """Initialize SQLite database with required tables."""
+    conn = sqlite3.connect(SQLITE_PATH)
+    cursor = conn.cursor()
     
-    def __init__(self, sqlite_path: str = "news.db", vector_path: str = "vectorstore"):
-        """Initialize database connections and vector store.
-        
-        Args:
-            sqlite_path: Path to SQLite database
-            vector_path: Path to vector store
-        """
-        self.sqlite_path = sqlite_path
-        self.vector_path = vector_path
-        
-        # Initialize Cohere embeddings with specific model
-        self.embeddings = CohereEmbeddings(
-            model="embed-english-v3.0",
-            cohere_api_key=os.getenv('COHERE_API_KEY')
+    # Create articles table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS articles (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            link TEXT NOT NULL,
+            source TEXT,
+            source_type TEXT NOT NULL,
+            published_date TIMESTAMP,
+            author TEXT,
+            image_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            engagement TEXT
         )
-        
-        # Initialize vector store
-        self.vectorstore = Chroma(
-            persist_directory=vector_path,
-            embedding_function=self.embeddings
+    """)
+    
+    # Create content table for storing different content formats
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS article_content (
+            article_id TEXT PRIMARY KEY,
+            text_content TEXT,
+            html_content TEXT,
+            markdown_content TEXT,
+            FOREIGN KEY (article_id) REFERENCES articles (id)
         )
-        
-        # Initialize SQLite
-        self._init_sqlite()
-        
-    def _init_sqlite(self):
-        """Initialize SQLite database with required tables."""
-        conn = sqlite3.connect(self.sqlite_path)
-        cursor = conn.cursor()
-        
-        # Create articles table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS articles (
-                id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                link TEXT NOT NULL,
-                source TEXT,
-                source_type TEXT NOT NULL,
-                published_date TIMESTAMP,
-                author TEXT,
-                image_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                engagement TEXT
-            )
-        """)
-        
-        # Create content table for storing different content formats
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS article_content (
-                article_id TEXT PRIMARY KEY,
-                text_content TEXT,
-                html_content TEXT,
-                markdown_content TEXT,
-                FOREIGN KEY (article_id) REFERENCES articles (id)
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
-        
-    def _generate_id(self, article: NewsArticle) -> str:
-        """Generate a unique ID for an article based on its content.
-        
-        Args:
-            article: NewsArticle object
-            
-        Returns:
-            str: Unique hash ID
-        """
-        # Combine unique fields to create hash
-        unique_string = f"{article.title}{article.link}{article.source}{article.published_date}"
-        return hashlib.sha256(unique_string.encode()).hexdigest()
-        
-    def _chunk_text(self, text: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Split text into chunks for vector storage.
-        
-        Args:
-            text: Text to split
-            metadata: Metadata to include with each chunk
-            
-        Returns:
-            List[Dict[str, Any]]: List of chunks with metadata
-        """
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=100,
-            separators=["\n\n", "\n", ". ", " ", ""]
-        )
-        
-        chunks = splitter.split_text(text)
-        return [{
-            "text": chunk,
-            "metadata": {
-                **metadata,
-                "chunk_index": i,
-                "total_chunks": len(chunks)
-            }
-        } for i, chunk in enumerate(chunks)]
-        
-    def _prepare_metadata(self, metadata: Dict) -> Dict:
-        """Clean metadata to ensure all values are simple types."""
-        # Make a copy to avoid modifying the original
-        cleaned_metadata = metadata.copy()
-        
-        # Convert datetime to string if it's not already a string
-        if cleaned_metadata.get('published_date'):
-            if isinstance(cleaned_metadata['published_date'], datetime):
-                cleaned_metadata['published_date'] = cleaned_metadata['published_date'].isoformat()
-            elif cleaned_metadata['published_date'] is None:
-                cleaned_metadata['published_date'] = ''
-        
-        # Convert all values to strings and handle None
-        cleaned_metadata = {
-            k: str(v) if v is not None else ''
-            for k, v in cleaned_metadata.items()
-        }
-        
-        # No need to filter since we've already cleaned everything to strings
-        return cleaned_metadata
+    """)
+    
+    conn.commit()
+    conn.close()
 
-    def store_articles(self, articles: List[NewsArticle]):
-        """Store articles in both SQLite and vector store.
+# Initialize database
+_init_sqlite()
+
+@db_agent.tool
+def store_article(ctx: RunContext[Any], article: NewsArticle) -> str:
+    """
+    Store an article in both SQLite and vector store.
+    
+    Args:
+        ctx: Runtime context (not used)
+        article: Article to store
         
-        Args:
-            articles: List of NewsArticle objects to store
-        """
-        conn = sqlite3.connect(self.sqlite_path)
-        cursor = conn.cursor()
-        
-        for article in articles:
-            article_id = self._generate_id(article)
-            
-            # Store in SQLite
-            cursor.execute("""
-                INSERT OR REPLACE INTO articles 
-                (id, title, link, source, source_type, published_date, author, image_url, engagement)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                article_id,
-                article.title,
-                article.link,
-                article.source,
-                article.source_type,
-                article.published_date,
-                article.author,
-                article.image_url,
-                json.dumps(article.engagement) if article.engagement else None
-            ))
-            
-            # Store content formats
-            if isinstance(article.content, ArticleContent):
-                cursor.execute("""
-                    INSERT OR REPLACE INTO article_content
-                    (article_id, text_content, html_content, markdown_content)
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    article_id,
-                    article.content.text,
-                    article.content.html,
-                    article.content.markdown
-                ))
-                content_for_vector = article.content.text
-            else:
-                cursor.execute("""
-                    INSERT OR REPLACE INTO article_content
-                    (article_id, text_content)
-                    VALUES (?, ?)
-                """, (
-                    article_id,
-                    article.content
-                ))
-                content_for_vector = article.content
-            
-            # Prepare metadata for vector store
-            metadata = {
-                "article_id": article_id,
-                "title": article.title,
-                "source": article.source,
-                "source_type": article.source_type,
-                "published_date": article.published_date.isoformat() if article.published_date else None,
-                "link": article.link,
-                "author": article.author
-            }
-            
-            # Create chunks and store in vector store
-            chunks = self._chunk_text(content_for_vector, metadata)
-            for chunk in chunks:
-                clean_metadata = self._prepare_metadata(chunk["metadata"])
-                
-                self.vectorstore.add_texts(
-                    texts=[chunk["text"]],
-                    metadatas=[clean_metadata]
-                )
-                
-        conn.commit()
+    Returns:
+        ID of the stored article
+    """
+    # Generate ID from title and link
+    article_id = hashlib.md5(f"{article.title}-{article.link}".encode()).hexdigest()
+    
+    # Store in SQLite
+    conn = sqlite3.connect(SQLITE_PATH)
+    cursor = conn.cursor()
+    
+    # Check if article already exists
+    cursor.execute("SELECT id FROM articles WHERE id = ?", (article_id,))
+    if cursor.fetchone():
         conn.close()
-        self.vectorstore.persist()
-        
-    def search_similar(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search for similar articles using vector similarity.
-        
-        Args:
-            query: Search query
-            limit: Maximum number of results
-            
-        Returns:
-            List[Dict[str, Any]]: Similar articles with metadata
-        """
-        results = self.vectorstore.similarity_search_with_relevance_scores(
-            query,
-            k=limit
+        return article_id  # Article already exists
+    
+    # Insert article metadata
+    cursor.execute("""
+        INSERT INTO articles 
+        (id, title, link, source, source_type, published_date, author, image_url, created_at, engagement) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        article_id,
+        article.title,
+        article.link,
+        article.source,
+        article.source_type,
+        article.published_date.isoformat() if article.published_date else None,
+        article.author,
+        article.image_url,
+        datetime.now().isoformat(),
+        json.dumps(article.engagement) if article.engagement else None
+    ))
+    
+    # Insert article content
+    cursor.execute("""
+        INSERT INTO article_content 
+        (article_id, text_content, html_content, markdown_content) 
+        VALUES (?, ?, ?, ?)
+    """, (
+        article_id,
+        article.content.text,
+        article.content.html,
+        article.content.markdown
+    ))
+    
+    conn.commit()
+    
+    # Store in vector database if text content exists
+    if article.content and article.content.text:
+        # Split text into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
         )
+        chunks = text_splitter.split_text(article.content.text)
         
-        # Get full article data from SQLite for each result
-        conn = sqlite3.connect(self.sqlite_path)
-        cursor = conn.cursor()
+        # Store chunks in vector store with metadata
+        metadata_list = [{
+            "article_id": article_id,
+            "title": article.title,
+            "link": article.link,
+            "source": article.source or "",
+            "source_type": article.source_type
+        } for _ in chunks]
         
-        enriched_results = []
-        for doc, score in results:
-            cursor.execute("""
-                SELECT a.*, ac.text_content, ac.html_content, ac.markdown_content
-                FROM articles a
-                LEFT JOIN article_content ac ON a.id = ac.article_id
-                WHERE a.id = ?
-            """, (doc.metadata["article_id"],))
+        vectorstore.add_texts(chunks, metadata_list)
+        vectorstore.persist()
+    
+    conn.close()
+    return article_id
+
+@db_agent.tool
+def search_similar(ctx: RunContext[Any], query: SearchQuery) -> List[SearchResult]:
+    """
+    Search for articles similar to the query text.
+    
+    Args:
+        ctx: Runtime context (not used)
+        query: Search parameters
+        
+    Returns:
+        List of search results with articles and similarity scores
+    """
+    # Search in vector store
+    docs_and_scores = vectorstore.similarity_search_with_score(
+        query.query, 
+        k=query.limit
+    )
+    
+    # Filter by similarity threshold
+    docs_and_scores = [(doc, score) for doc, score in docs_and_scores if score >= query.min_similarity]
+    
+    # Get full article data for each result
+    results = []
+    conn = sqlite3.connect(SQLITE_PATH)
+    cursor = conn.cursor()
+    
+    for doc, score in docs_and_scores:
+        article_id = doc.metadata.get("article_id")
+        cursor.execute("""
+            SELECT a.title, a.link, a.source, a.source_type, a.published_date,
+                  a.author, a.image_url, a.created_at, a.engagement,
+                  c.text_content, c.html_content, c.markdown_content
+            FROM articles a
+            LEFT JOIN article_content c ON a.id = c.article_id
+            WHERE a.id = ?
+        """, (article_id,))
+        
+        row = cursor.fetchone()
+        if row:
+            article = NewsArticle(
+                title=row[0],
+                link=row[1],
+                source=row[2],
+                source_type=row[3],
+                published_date=datetime.fromisoformat(row[4]) if row[4] else None,
+                author=row[5],
+                image_url=row[6],
+                engagement=json.loads(row[8]) if row[8] else None,
+                content=ArticleContent(
+                    text=row[9] or "",
+                    html=row[10] or "",
+                    markdown=row[11] or ""
+                )
+            )
             
-            row = cursor.fetchone()
-            if row:
-                enriched_results.append({
-                    "article": {
-                        "id": row[0],
-                        "title": row[1],
-                        "link": row[2],
-                        "source": row[3],
-                        "source_type": row[4],
-                        "published_date": row[5],
-                        "author": row[6],
-                        "image_url": row[7],
-                        "created_at": row[8],
-                        "engagement": json.loads(row[9]) if row[9] else None,
-                        "content": {
-                            "text": row[10],
-                            "html": row[11],
-                            "markdown": row[12]
-                        }
-                    },
-                    "chunk": doc.page_content,
-                    "similarity_score": score
-                })
-                
-        conn.close()
-        return enriched_results 
+            results.append(SearchResult(
+                article=article,
+                chunk=doc.page_content,
+                similarity_score=score
+            ))
+    
+    conn.close()
+    return results
+
+# Simple interface functions
+def store_articles(articles: List[NewsArticle]) -> StoreResult:
+    """Store multiple articles and return results."""
+    result = StoreResult(stored_count=0, skipped_count=0)
+    
+    for article in articles:
+        try:
+            db_agent.run_sync("Store this article", deps=None, inputs={"article": article})
+            result.stored_count += 1
+        except Exception as e:
+            result.errors.append(f"Error storing {article.title}: {str(e)}")
+            result.skipped_count += 1
+    
+    return result
+
+def search_similar_articles(query_text: str, limit: int = 5) -> List[SearchResult]:
+    """Search for articles similar to the query text."""
+    query = SearchQuery(query=query_text, limit=limit)
+    result = db_agent.run_sync("Find similar articles", deps=None, inputs={"query": query})
+    
+    if isinstance(result.data, list):
+        return result.data
+    return [] 

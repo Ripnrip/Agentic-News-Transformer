@@ -1,125 +1,191 @@
-from typing import List, Dict
-from openai import OpenAI
+"""Agent for generating accessible and inclusive tech content using Pydantic AI."""
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent, RunContext
 import os
-from database_agent import DatabaseAgent
 import json
-from textwrap import dedent
 from datetime import datetime
+from openai import OpenAI
 
-class ContentGenerationAgent:
-    """Agent for generating accessible and inclusive tech content."""
+# Define model types
+class SimilarArticle(BaseModel):
+    """Model for similar article data."""
+    title: str
+    content: str
+    source: Optional[str] = None
+    url: Optional[str] = None
+    similarity_score: float
+
+class GenerationRequest(BaseModel):
+    """Model for content generation request."""
+    topic: str
+    similar_articles: List[SimilarArticle] = Field(default_factory=list)
+    tone: str = "informative"
+    target_audience: str = "general"
+    word_count: int = 800
+
+class GeneratedContent(BaseModel):
+    """Model for generated content."""
+    headline: str
+    intro: str
+    body: str
+    conclusion: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+# Create the agent
+content_agent = Agent(
+    "openai:gpt-4o",
+    deps_type=Any,  # We'll use this for database agent
+    result_type=GeneratedContent,
+    system_prompt="Generate accessible, informative tech content about AI topics."
+)
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+@content_agent.tool
+def generate_article_content(
+    ctx: RunContext[Any],
+    request: GenerationRequest
+) -> GeneratedContent:
+    """
+    Generate a complete article based on the request.
     
-    def __init__(self, db_agent: DatabaseAgent):
-        self.db_agent = db_agent
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    Args:
+        ctx: Runtime context (contains database agent)
+        request: Generation parameters and similar articles
         
-    def _build_article_context(self, similar_articles: List[Dict]) -> str:
-        """Build context from similar articles."""
-        context = []
-        for article in similar_articles:
-            context.append(f"""
-Title: {article['article']['title']}
-Source: {article['article']['source']}
-Content: {article['chunk']}
----""")
-        return "\n".join(context)
+    Returns:
+        The generated content with metadata
+    """
+    # Build prompt with context from similar articles
+    context_text = "\n\n".join([
+        f"Article: {article.title}\nSource: {article.source or 'Unknown'}\n"
+        f"Content: {article.content[:500]}...\n"
+        for article in request.similar_articles
+    ])
     
-    def _generate_content(self, context: str, topic: str, similar_articles: List[Dict]) -> Dict[str, str]:
-        """Generate article content using GPT-4 and include metadata."""
-        prompt = dedent(f"""
-            Based on the following articles about {topic}, create a comprehensive blog post.
-            Make it engaging and accessible while maintaining technical accuracy. The tone should be a sexy girl news reporter seducing the audience.
-
-            Source Articles:
-            {context}
-
-            Generate content within these length limits:
-            - Headline: 50-100 characters
-            - Introduction: 150-200 words
-            - Main body: 800-1000 words
-            - Conclusion: 100-150 words
-
-            Format the response as a valid JSON object with these exact keys:
-            {{
-                "headline": "Your headline here",
-                "intro": "Your introduction here",
-                "body": "Your main content here",
-                "conclusion": "Your conclusion here"
-            }}
-
-            Ensure the response is properly formatted JSON with escaped quotes and newlines.
-        """).strip()
+    prompt = f"""
+    Generate a clear, accessible article about "{request.topic}" in a {request.tone} tone for a {request.target_audience} audience.
+    
+    The article should be approximately {request.word_count} words and include:
+    1. An attention-grabbing headline
+    2. An engaging introduction
+    3. Informative body content 
+    4. A concise conclusion
+    
+    REFERENCE CONTEXT:
+    {context_text}
+    
+    FORMAT:
+    Return a JSON object with the following structure:
+    {{
+        "headline": "The headline",
+        "intro": "Introduction paragraph",
+        "body": "Main content...",
+        "conclusion": "Concluding paragraph",
+        "metadata": {{
+            "topic": "{request.topic}",
+            "word_count": <actual_word_count>,
+            "tone": "{request.tone}",
+            "audience": "{request.target_audience}",
+            "hashtags": ["#relevanthashtag1", "#relevanthashtag2"]
+        }}
+    }}
+    """
+    
+    # Generate content with OpenAI
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.7
+    )
+    
+    # Parse response JSON
+    try:
+        content_json = json.loads(response.choices[0].message.content)
         
-        response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a skilled tech writer creating engaging content."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=7000
+        # Create and return structured result
+        return GeneratedContent(
+            headline=content_json.get("headline", f"Article about {request.topic}"),
+            intro=content_json.get("intro", ""),
+            body=content_json.get("body", ""),
+            conclusion=content_json.get("conclusion", ""),
+            metadata=content_json.get("metadata", {
+                "topic": request.topic,
+                "generated_at": datetime.now().isoformat()
+            })
         )
-        
-        try:
-            content = json.loads(response.choices[0].message.content)
-            
-            # Add metadata with safer access to fields
-            metadata = {
-                "generated_date": datetime.now().isoformat(),
-                "topic": topic,
-                "sources": [
-                    {
-                        "title": article.get('article', {}).get('title', ''),
-                        "url": article.get('article', {}).get('link', ''),
-                        "source": article.get('article', {}).get('source', ''),
-                        "published_date": article.get('article', {}).get('published_date', ''),
-                        "article_id": article.get('article', {}).get('id', ''),
-                        "chunk": article.get('chunk', ''),
-                        "similarity_score": article.get('similarity_score', 0.0)
-                    }
-                    for article in similar_articles
-                ],
-                "hashtags": self._generate_hashtags(topic, content['headline']),
-                "word_counts": {
-                    "intro": len(content['intro'].split()),
-                    "body": len(content['body'].split()),
-                    "conclusion": len(content['conclusion'].split())
-                }
-            }
-            
-            return {**content, "metadata": metadata}
-        except json.JSONDecodeError as e:
-            print(f"Error parsing GPT response: {e}")
-            return {
-                "headline": "Error parsing response",
-                "intro": response.choices[0].message.content[:200],
-                "body": response.choices[0].message.content[200:1800],
-                "conclusion": response.choices[0].message.content[1800:]
-            }
+    except Exception as e:
+        raise ValueError(f"Failed to parse generated content: {str(e)}")
+
+@content_agent.tool
+def generate_hashtags(
+    ctx: RunContext[Any],
+    topic: str,
+    count: int = 5
+) -> List[str]:
+    """
+    Generate relevant hashtags for a topic.
     
-    def _generate_hashtags(self, topic: str, headline: str) -> List[str]:
-        """Generate relevant hashtags from topic and headline."""
-        prompt = dedent(f"""
-            Generate 5-7 relevant hashtags for a tech article with:
-            Topic: {topic}
-            Headline: {headline}
-            
-            Format as JSON array of strings. Make hashtags trendy and relevant.
-        """)
+    Args:
+        ctx: Runtime context
+        topic: The topic to generate hashtags for
+        count: Number of hashtags to generate
         
-        response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
-        )
-        
-        try:
-            return json.loads(response.choices[0].message.content)
-        except:
-            return [f"#{topic.replace(' ', '')}", "#AI", "#Tech"]
+    Returns:
+        List of hashtag strings
+    """
+    prompt = f"""
+    Generate {count} relevant hashtags for content about "{topic}".
+    The hashtags should be relevant to AI and technology trends.
+    Return only the hashtags as a JSON array of strings.
+    """
     
-    def generate_article(self, topic: str) -> Dict[str, str]:
-        """Generate clear, accessible tech content."""
-        similar_articles = self.db_agent.search_similar(topic)
-        context = self._build_article_context(similar_articles)
-        return self._generate_content(context, topic, similar_articles) 
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.7
+    )
+    
+    try:
+        hashtags = json.loads(response.choices[0].message.content).get("hashtags", [])
+        return hashtags if hashtags else [f"#{topic.replace(' ', '')}", "#AI", "#Tech"]
+    except:
+        return [f"#{topic.replace(' ', '')}", "#AI", "#Tech"]
+
+# Simple interface function
+def generate_article(topic: str, db_search_results=None) -> Dict[str, Any]:
+    """Generate an article about the given topic."""
+    # Convert search results to SimilarArticle objects
+    similar_articles = []
+    if db_search_results:
+        for result in db_search_results:
+            similar_articles.append(SimilarArticle(
+                title=result.article.title,
+                content=result.chunk,
+                source=result.article.source,
+                url=result.article.link,
+                similarity_score=result.similarity_score
+            ))
+    
+    # Create request
+    request = GenerationRequest(
+        topic=topic,
+        similar_articles=similar_articles
+    )
+    
+    # Generate content
+    result = content_agent.run_sync(
+        "Generate an article about this topic",
+        deps=None,
+        inputs={"request": request}
+    )
+    
+    if isinstance(result.data, GeneratedContent):
+        # Convert to dict for easy serialization
+        return result.data.dict()
+    
+    raise ValueError("Failed to generate content") 
