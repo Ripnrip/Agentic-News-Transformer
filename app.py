@@ -4,13 +4,15 @@ from database_agent import DatabaseAgent
 from content_generator import ContentGenerationAgent
 from audio_generator import AudioGenerationAgent
 from models import NewsArticle, ArticleContent
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
+from social_media_agent import SocialMediaAgent
 
 # Initialize agents
 db_agent = DatabaseAgent()
 content_agent = ContentGenerationAgent(db_agent)
 audio_agent = AudioGenerationAgent()
+social_agent = SocialMediaAgent()
 
 # Available ElevenLabs voices
 VOICES = {
@@ -136,6 +138,91 @@ def main():
                             file_name=f"content_{timestamp}.json",
                             mime="application/json"
                         )
+
+            # After generating audio content
+            if 'audio_content' in locals():
+                # Add social media distribution section
+                st.header("Social Media Distribution")
+                
+                # Platform selection
+                platforms = st.multiselect(
+                    "Select platforms to publish to",
+                    options=list(social_agent.platforms.keys()),
+                    default=[]
+                )
+                
+                # Custom personalities
+                st.subheader("Platform Personalities")
+                custom_personalities = {}
+                
+                for platform in platforms:
+                    default_personality = social_agent.platform_personalities.get(platform, "default")
+                    
+                    if platform == "x":
+                        options = ["casual", "professional", "enthusiastic"]
+                    elif platform == "facebook":
+                        options = ["casual", "storyteller", "professional"]
+                    elif platform == "linkedin":
+                        options = ["thought_leader", "industry_expert", "educator"]
+                    else:
+                        options = ["default", "casual", "professional"]
+                    
+                    selected = st.selectbox(
+                        f"Personality for {platform}",
+                        options=options,
+                        index=options.index(default_personality) if default_personality in options else 0
+                    )
+                    
+                    custom_personalities[platform] = selected
+                
+                # Schedule posting
+                schedule = st.checkbox("Schedule for later")
+                post_time = None
+                
+                if schedule:
+                    post_time = st.date_input("Post date") 
+                    post_hour = st.slider("Hour", 0, 23, 9)
+                    post_minute = st.slider("Minute", 0, 59, 0, step=5)
+                    post_time = datetime.combine(post_time, datetime.min.time()) + timedelta(hours=post_hour, minutes=post_minute)
+                    
+                    st.write(f"Scheduled for: {post_time.strftime('%Y-%m-%d %H:%M')}")
+                
+                # Post button
+                if st.button("Post to Social Media"):
+                    with st.spinner("Posting to social media..."):
+                        # Prepare media files
+                        media_files = {
+                            platform: [audio_content["audio_file"]] for platform in platforms
+                        }
+                        
+                        # Post or schedule
+                        if schedule and post_time:
+                            results = social_agent.schedule_post(
+                                content=article,
+                                media_files=media_files,
+                                platforms=platforms,
+                                custom_personalities=custom_personalities,
+                                post_time=post_time
+                            )
+                            
+                            if results.get("scheduled"):
+                                st.success(f"Scheduled posts for {post_time.strftime('%Y-%m-%d %H:%M')}")
+                            else:
+                                st.error("Failed to schedule posts")
+                        else:
+                            results = social_agent.post_to_platforms(
+                                content=article,
+                                media_files=media_files,
+                                platforms=platforms,
+                                custom_personalities=custom_personalities
+                            )
+                            
+                            # Display results
+                            for platform, result in results.items():
+                                if result.get("success"):
+                                    st.success(f"Posted to {platform}! Post ID: {result.get('post_id')}")
+                                else:
+                                    st.error(f"Failed to post to {platform}: {result.get('error')}")
         else:
             st.error("Please enter at least one URL")
 

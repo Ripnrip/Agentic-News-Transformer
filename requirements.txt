@@ -17,3 +17,8 @@ langchain>=0.1.0
 langchain-core>=0.1.0
 langchain-community>=0.1.0
 langchain-cohere>=0.1.0
+
+# Social Media APIs
+tweepy>=4.14.0  # For Twitter/X
+facebook-sdk>=3.1.0  # For Facebook
+linkedin-api>=2.0.0a  # For LinkedIn
