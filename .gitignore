@@ -164,3 +164,56 @@ ScrapeBannedVideo_InfoWars.mov
 
 # Ignore cache and results directories
 cache/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Vector store
+vectorstore/
+
+# Cache
+cache/
+.cache/
+
+# Generated content
+generated_content/
+generated_audio/
+results/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 import requests
 from aiohttp.client_exceptions import ClientError
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from pygooglenews import GoogleNews
+# Commented out due to installation issues
+# from pygooglenews import GoogleNews
 from requests.exceptions import RequestException
 
 # Local imports
@@ -488,45 +489,28 @@ class NewsSearchAgent:
 
     def fetch_ai_news_from_google(self) -> List[NewsArticle]:
         """Fetch AI news articles from Google News and resolve their actual URLs."""
-        gn = GoogleNews(lang='en', country='US')
-        search_results = gn.search('AI')
+        # Commented out due to pygooglenews dependency issues
+        print("Google News search is disabled due to dependency issues.")
+        return []
         
-        articles = []
-        print("\nResolving Google News URLs...")
-        
-        for entry in search_results['entries'][:self.article_limit]:
-            try:
-                # First get the redirect URL from Google News
-                print(f"Following redirect for: {entry['title']}")
-                response = requests.head(
-                    entry['link'], 
-                    allow_redirects=True, 
-                    timeout=10,
-                    headers={'User-Agent': 'Mozilla/5.0'}  # Add user agent to avoid blocks
-                )
-                actual_url = response.url
-                
-                # Only add articles with valid resolved URLs
-                if actual_url and not actual_url.startswith('https://news.google.com'):
-                    articles.append(NewsArticle(
-                        title=entry['title'],
-                        link=actual_url,  # Store the actual article URL
-                        source='Google News',
-                        source_type='google'
-                    ))
-                    print(f"✓ Resolved URL: {actual_url}")
-                else:
-                    print(f"✗ Could not resolve URL for: {entry['title']}")
-                
-            except RequestException as e:
-                print(f"✗ Error resolving URL for {entry['title']}: {str(e)}")
-                continue
-            
-            # Small delay between requests
-            time.sleep(1)
-        
-        print(f"\nResolved {len(articles)} URLs from Google News")
-        return articles
+        # Original implementation:
+        # gn = GoogleNews(lang='en', country='US')
+        # search_results = gn.search('AI')
+        # 
+        # articles = []
+        # print("\nResolving Google News URLs...")
+        # 
+        # for entry in search_results['entries'][:self.article_limit]:
+        #     try:
+        #         # First get the redirect URL from Google News
+        #         print(f"Following redirect for: {entry['title']}")
+        #         response = requests.head(
+        #             entry['link'], 
+        #             allow_redirects=True, 
+        #             timeout=10,
+        #             headers={'User-Agent': 'Mozilla/5.0'}  # Add user agent to avoid blocks
+        #         )
+        #         actual_url = response.url
 
     def fetch_ai_news_from_newsapi(self) -> List[NewsArticle]:
         """Fetch AI news articles from NewsAPI with full content.

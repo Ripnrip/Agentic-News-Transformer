@@ -42,24 +42,27 @@ def main():
     agent = NewsSearchAgent(article_limit=args.limit)
     
     # Initialize clients
-    #newsapi_client = NewsAPIClient()
     newsdatahub_client = NewsDataHubClient()
     
+    # Check if we have the required API key
+    if not os.getenv('NEWS_DATA_HUB_KEY'):
+        print("\nError: NEWS_DATA_HUB_KEY not found in environment variables.")
+        print("Please update your .env file with a valid API key from https://newsdatahub.com/")
+        return
+    
     # Fetch from sources
-    #google_ai_news = agent.fetch_ai_news_from_google()
-    #newsapi_articles = newsapi_client.fetch_ai_news(days_back=7, limit=10)
     newsdatahub_articles = newsdatahub_client.fetch_ai_news(days_back=7, limit=5)
     
     # Combine results
-    #all_articles = newsapi_articles + newsdatahub_articles
-    # Temporary only using newsdatahub
-
     all_articles = newsdatahub_articles
 
     print(f"\nTotal Articles Found: {len(all_articles)}")
     print("\nArticle Sources:")
-    #print(f"- NewsAPI: {len(newsapi_articles)}")
     print(f"- NewsDataHub: {len(newsdatahub_articles)}")
+    
+    if not all_articles:
+        print("\nNo articles found. Please check your API key and try again.")
+        return
     
     # Step 2: Parse the actual article content
     print("\nStep 2: Parsing article content...")

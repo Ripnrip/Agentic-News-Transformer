@@ -7,10 +7,13 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from langchain_cohere import CohereEmbeddings
+from langchain_chroma import Chroma
+from dotenv import load_dotenv
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings.cohere import CohereEmbeddings
+
+load_dotenv()
 
 # Define model types
 class ArticleContent(BaseModel):
@@ -64,7 +67,8 @@ VECTOR_PATH = "vectorstore"
 # Initialize embeddings
 embeddings = CohereEmbeddings(
     model="embed-english-v3.0",
-    cohere_api_key=os.getenv('COHERE_API_KEY')
+    cohere_api_key=os.getenv('COHERE_API_KEY'),
+    user_agent="Agentic-Content-Transformer/1.0"
 )
 
 # Initialize vector store
@@ -279,4 +283,134 @@ def search_similar_articles(query_text: str, limit: int = 5) -> List[SearchResul
     
     if isinstance(result.data, list):
         return result.data
-    return [] 
+    return []
+
+class DatabaseAgent:
+    def __init__(self):
+        _init_sqlite()
+        self.vectorstore = vectorstore
+
+    def store_article(self, article: ArticleContent) -> StoreResult:
+        try:
+            conn = sqlite3.connect(SQLITE_PATH)
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR IGNORE INTO articles (title, content, url, source, published_date)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (article.title, article.text, article.url, article.source, article.published_date))
+            conn.commit()
+            conn.close()
+
+            # Store in vector database
+            self.vectorstore.add_texts(
+                texts=[article.text],
+                metadatas=[{
+                    'title': article.title,
+                    'url': article.url,
+                    'source': article.source,
+                    'published_date': article.published_date
+                }]
+            )
+            self.vectorstore.persist()
+
+            return StoreResult(stored_count=1, skipped_count=0)
+        except Exception as e:
+            return StoreResult(stored_count=0, skipped_count=1, errors=[f"Error storing article: {str(e)}"])
+
+    def store_articles(self, articles: List[ArticleContent]) -> List[StoreResult]:
+        """Store multiple articles and return results for each."""
+        results = []
+        for article in articles:
+            result = self.store_article(article)
+            results.append(result)
+        return results
+
+    def search_articles(self, query: SearchQuery) -> List[SearchResult]:
+        try:
+            results = self.vectorstore.similarity_search_with_score(
+                query.query,
+                k=10,
+                filter=query.filters
+            )
+            return [
+                SearchResult(
+                    article=NewsArticle(
+                        title=doc.metadata['title'],
+                        content=ArticleContent(
+                            text=doc.page_content,
+                            html=doc.metadata['html'] or "",
+                            markdown=doc.metadata['markdown'] or "",
+                            url=doc.metadata['url'] or "",
+                            source=doc.metadata['source'] or "",
+                            published_date=doc.metadata['published_date'] or datetime.now().isoformat()
+                        ),
+                        link=doc.metadata['url'] or "",
+                        source=doc.metadata['source'] or "",
+                        source_type=doc.metadata['source_type'] or "web",
+                        published_date=datetime.fromisoformat(doc.metadata['published_date'] or datetime.now().isoformat()) if doc.metadata['published_date'] else None,
+                        author=doc.metadata['author'] or "",
+                        image_url=doc.metadata['image_url'] or None,
+                        engagement=doc.metadata['engagement'] if doc.metadata['engagement'] else None
+                    ),
+                    score=doc[1]
+                )
+                for doc, score in results
+            ]
+        except Exception as e:
+            print(f"Error searching articles: {str(e)}")
+            return []
+
+    def search_similar(self, query: str) -> List[Dict[str, Any]]:
+        """Search for similar articles using the query string."""
+        try:
+            results = self.vectorstore.similarity_search_with_score(
+                query,
+                k=5
+            )
+            return [
+                {
+                    'article': {
+                        'title': doc.metadata['title'],
+                        'url': doc.metadata['url'],
+                        'source': doc.metadata['source'],
+                        'published_date': doc.metadata['published_date']
+                    },
+                    'similarity_score': score,
+                    'chunk': doc.page_content
+                }
+                for doc, score in results
+            ]
+        except Exception as e:
+            print(f"Error searching similar articles: {str(e)}")
+            return []
+
+    def get_article_by_url(self, url: str) -> Optional[NewsArticle]:
+        try:
+            conn = sqlite3.connect(SQLITE_PATH)
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM articles WHERE url = ?', (url,))
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                return NewsArticle(
+                    title=row[1],
+                    link=row[2],
+                    content=ArticleContent(
+                        text=row[3] or "",
+                        html=row[4] or "",
+                        markdown=row[5] or "",
+                        url=row[2],
+                        source=row[6] or "",
+                        published_date=row[7] or datetime.now().isoformat()
+                    ),
+                    source=row[6] or "",
+                    source_type=row[8] or "web",
+                    published_date=datetime.fromisoformat(row[7] or datetime.now().isoformat()) if row[7] else None,
+                    author=row[9] or "",
+                    image_url=row[10] or None
+                )
+            return None
+        except Exception as e:
+            print(f"Error getting article: {str(e)}")
+            return None 

@@ -1,19 +1,14 @@
-pydantic
-pylint
-selenium>=4.6.0
-pygooglenews
-requests
-cohere>=4.37
-chromadb>=0.4.22
-python-dotenv
-crawl4ai
-openai
-tiktoken>=0.5.2
-elevenlabs>=1.51.0
-streamlit
+openai>=1.0.0
+cohere>=4.0.0
+langchain>=0.1.0
+chromadb>=0.4.0
+elevenlabs>=0.2.0
+streamlit>=1.30.0
+python-dotenv>=1.0.0
+newsapi-python>=0.2.7
+requests>=2.31.0
 
 # Langchain packages with compatible versions
-langchain>=0.1.0
 langchain-core>=0.1.0
 langchain-community>=0.1.0
 langchain-cohere>=0.1.0
