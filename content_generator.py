@@ -171,21 +171,67 @@ def generate_article(topic: str, db_search_results=None) -> Dict[str, Any]:
                 similarity_score=result.similarity_score
             ))
     
-    # Create request
-    request = GenerationRequest(
-        topic=topic,
-        similar_articles=similar_articles
+    # Build context from similar articles
+    context_text = "\n\n".join([
+        f"Article: {article.title}\nSource: {article.source or 'Unknown'}\n"
+        f"Content: {article.content[:500]}...\n"
+        for article in similar_articles
+    ])
+    
+    # Create prompt
+    prompt = f"""
+    Generate a clear, accessible article about "{topic}" in an informative tone for a general audience.
+    
+    The article should be approximately 800 words and include:
+    1. An attention-grabbing headline
+    2. An engaging introduction
+    3. Informative body content 
+    4. A concise conclusion
+    
+    REFERENCE CONTEXT:
+    {context_text}
+    
+    FORMAT:
+    Return a JSON object with the following structure:
+    {{
+        "headline": "The headline",
+        "intro": "Introduction paragraph",
+        "body": "Main content...",
+        "conclusion": "Concluding paragraph",
+        "metadata": {{
+            "topic": "{topic}",
+            "word_count": <actual_word_count>,
+            "tone": "informative",
+            "audience": "general",
+            "hashtags": ["#relevanthashtag1", "#relevanthashtag2"],
+            "generated_date": "<current_date>"
+        }}
+    }}
+    """
+    
+    # Generate content with OpenAI directly
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.7
     )
     
-    # Generate content
-    result = content_agent.run_sync(
-        "Generate an article about this topic",
-        deps=None,
-        inputs={"request": request}
-    )
-    
-    if isinstance(result.data, GeneratedContent):
-        # Convert to dict for easy serialization
-        return result.data.dict()
-    
-    raise ValueError("Failed to generate content") 
+    # Parse response JSON
+    try:
+        content_json = json.loads(response.choices[0].message.content)
+        
+        # Add generated date if not present
+        if "metadata" in content_json and "generated_date" not in content_json["metadata"]:
+            content_json["metadata"]["generated_date"] = datetime.now().isoformat()
+            
+        # Add sources metadata
+        if "metadata" in content_json:
+            content_json["metadata"]["sources"] = [
+                {"title": a.title, "source": a.source, "url": a.url, "score": a.similarity_score}
+                for a in similar_articles
+            ]
+        
+        return content_json
+    except Exception as e:
+        raise ValueError(f"Failed to parse generated content: {str(e)}") 

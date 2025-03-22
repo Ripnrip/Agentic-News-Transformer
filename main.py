@@ -44,11 +44,16 @@ def main():
     # Initialize clients
     newsdatahub_client = NewsDataHubClient()
     
-    # Check if we have the required API key
-    if not os.getenv('NEWS_DATA_HUB_KEY'):
-        print("\nError: NEWS_DATA_HUB_KEY not found in environment variables.")
-        print("Please update your .env file with a valid API key from https://newsdatahub.com/")
+    # Check for API keys
+    newsdata_hub_key = os.getenv('NEWS_DATA_HUB_KEY')
+    if not newsdata_hub_key:
+        print("❌ NEWS_DATA_HUB_KEY not found in environment variables.")
         return
+    
+    # Print partial API key for debugging
+    key_length = len(newsdata_hub_key)
+    masked_key = newsdata_hub_key[:4] + '*' * (key_length - 8) + newsdata_hub_key[-4:] if key_length > 8 else "too_short"
+    print(f"Using NewsDataHub API key: {masked_key}")
     
     # Fetch from sources
     newsdatahub_articles = newsdatahub_client.fetch_ai_news(days_back=7, limit=5)

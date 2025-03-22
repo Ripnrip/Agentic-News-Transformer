@@ -87,7 +87,9 @@ class NewsVectorStore:
                 "source_type": a.source_type or "Unknown",
                 "published_date": a.published_date.isoformat() if a.published_date else "1970-01-01T00:00:00Z",
                 "author": a.author or "Unknown",
-                "link": a.link or "No Link"
+                "link": a.link or "No Link",
+                "url": a.link or "No Link",  # Add url field to match search_similar expectations
+                "title": a.title or "Untitled"
             } for a in new_articles]
             new_ids = [str(hash(a.link)) for a in new_articles]
 

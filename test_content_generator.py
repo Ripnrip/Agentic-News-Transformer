@@ -1,17 +1,15 @@
 from database_agent import DatabaseAgent
-from content_generator import ContentGenerationAgent
+from content_generator import generate_article, openai_client
 import json
 from datetime import datetime
 import os
-from audio_generator import AudioGenerationAgent
-from openai import OpenAI
+from audio_generator import generate_audio_content
 
 def test_content_generation():
     """Test the content generation pipeline."""
     
     # Initialize agents
     db_agent = DatabaseAgent()
-    content_agent = ContentGenerationAgent(db_agent)
     
     # Test topics
     topics = [
@@ -28,7 +26,7 @@ def test_content_generation():
     # Generate and save articles
     for topic in topics:
         print(f"\nGenerating article about: {topic}")
-        article = content_agent.generate_article(topic)
+        article = generate_article(topic)
         
         # Save to file
         filename = f"{results_dir}/article_{topic.replace(' ', '_')}_{timestamp}.json"
@@ -40,16 +38,15 @@ def test_content_generation():
         print(f"Headline: {article['headline']}")
         print(f"Intro: {article['intro'][:200]}...")
         print("\nMetadata:")
-        print(f"Generated: {article['metadata']['generated_date']}")
-        print(f"Sources: {len(article['metadata']['sources'])} articles")
-        print(f"Hashtags: {' '.join(article['metadata']['hashtags'])}")
-        print(f"Word counts: {article['metadata']['word_counts']}")
+        print(f"Generated: {article['metadata'].get('generated_date', datetime.now().isoformat())}")
+        print(f"Sources: {len(article['metadata'].get('sources', []))}")
+        print(f"Hashtags: {' '.join(article['metadata'].get('hashtags', []))}")
+        print(f"Word counts: {article['metadata'].get('word_count', 0)}")
         print(f"\nSaved to: {filename}")
 
         # After generating the article
         print("\nGenerating audio content...")
-        audio_agent = AudioGenerationAgent()
-        audio_content = audio_agent.generate_audio_content(article, content_agent.client)
+        audio_content = generate_audio_content(article)
         
         print(f"\nAudio Content Generated:")
         print(f"Audio file: {audio_content['audio_file']}")
@@ -60,10 +57,6 @@ def test_content_generation():
 def test_audio_from_existing():
     """Generate audio from existing articles in generated_content directory."""
     print("\nGenerating audio from existing content...")
-    
-    # Initialize audio agent
-    audio_agent = AudioGenerationAgent()
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     # Find all JSON files in generated_content
     content_dir = "generated_content"
@@ -77,7 +70,7 @@ def test_audio_from_existing():
             article = json.load(f)
         
         # Generate audio content
-        audio_content = audio_agent.generate_audio_content(article, openai_client)
+        audio_content = generate_audio_content(article)
         
         print(f"Audio Content Generated:")
         print(f"Audio file: {audio_content['audio_file']}")
@@ -86,5 +79,5 @@ def test_audio_from_existing():
         print(f"Estimated duration: {audio_content['duration']:.1f} seconds")
 
 if __name__ == "__main__":
-    #test_content_generation()  # Comment out original test
-    test_audio_from_existing()  # Run audio generation only 
+    test_content_generation()  # Uncomment to run content generation
+    #test_audio_from_existing()  # Run audio generation only 

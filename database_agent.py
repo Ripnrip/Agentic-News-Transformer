@@ -370,10 +370,10 @@ class DatabaseAgent:
             return [
                 {
                     'article': {
-                        'title': doc.metadata['title'],
-                        'url': doc.metadata['url'],
-                        'source': doc.metadata['source'],
-                        'published_date': doc.metadata['published_date']
+                        'title': doc.metadata.get('title', 'Untitled'),
+                        'url': doc.metadata.get('url', doc.metadata.get('link', '')),
+                        'source': doc.metadata.get('source', 'Unknown'),
+                        'published_date': doc.metadata.get('published_date', '')
                     },
                     'similarity_score': score,
                     'chunk': doc.page_content
