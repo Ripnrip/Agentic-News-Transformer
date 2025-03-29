@@ -1,6 +1,7 @@
 """News to Avatar Pipeline - Convert news articles to lip-synced avatar videos."""
 import os
 import streamlit as st
+import urllib.parse
 
 # Set page config at the very beginning
 st.set_page_config(
@@ -107,15 +108,26 @@ def generate_audio(script, audio_agent):
             text=script,
             title="News Script",
             voice_id="21m00Tcm4TlvDq8ikWAM",  # Default voice ID
-            output_dir="generated_audio"
+            output_dir="generated_audio",
+            upload_to_s3=True,  # Enable S3 upload
+            s3_bucket="vectorverseevolve",
+            s3_region="us-west-2"
         )
         
         # Generate audio
         result = audio_agent.generate_audio_content(request)
         
         if result and hasattr(result, 'audio_file'):
-            st.success("Audio generated successfully!")
-            return result.audio_file
+            if result.audio_url:
+                st.success(f"Audio generated and uploaded successfully! URL: {result.audio_url}")
+            else:
+                st.success("Audio generated successfully! (Not uploaded to S3)")
+            
+            # Return both the local file path and the S3 URL
+            return {
+                'audio_file': result.audio_file,
+                'audio_url': result.audio_url
+            }
         else:
             st.error("Failed to generate audio: No audio file in result")
             return None
@@ -126,26 +138,58 @@ def generate_audio(script, audio_agent):
 def generate_avatar_video(audio_file, avatar_name, sync_api_key, 
                       poll_for_completion=True, poll_interval=10, 
                       indefinite_polling=False, max_attempts=30, audio_url=None):
-    """Generate lip-synced video using Sync.so API."""
+    """Generate a lip-synced avatar video."""
     try:
-        # Log start of video generation process
         print(f"🎬 Starting video generation for audio: {audio_file}")
         print(f"🤖 Using avatar: {avatar_name}")
-        
-        # Check if audio file exists
-        if not os.path.exists(audio_file):
-            print(f"❌ Error: Audio file not found: {audio_file}")
-            return None
         
         # Initialize avatar generation agent
         print(f"🔄 Initializing avatar generation agent...")
         avatar_agent = AvatarGenerationAgent()
         
-        # Generate video
+        # Set up video generation settings
         print(f"🎥 Generating video with settings: poll_for_completion={poll_for_completion}, poll_interval={poll_interval}, indefinite_polling={indefinite_polling}")
-        video_result = avatar_agent.generate_video(
+        
+        # Ensure audio URL is properly encoded (but not double-encoded)
+        if audio_url:
+            # First decode the URL in case it's already encoded to prevent double encoding
+            import urllib.parse
+            try:
+                # Try to decode the URL first to ensure we don't double-encode
+                decoded_url = urllib.parse.unquote(audio_url)
+                
+                # Now parse and properly encode it exactly once
+                parsed_url = urllib.parse.urlparse(decoded_url)
+                path = urllib.parse.quote(parsed_url.path)
+                
+                # Reconstruct the URL with a properly encoded path
+                audio_url = urllib.parse.urlunparse((
+                    parsed_url.scheme,
+                    parsed_url.netloc,
+                    path,
+                    parsed_url.params,
+                    parsed_url.query,
+                    parsed_url.fragment
+                ))
+                
+                print(f"🔊 Using properly encoded audio URL: {audio_url}")
+            except Exception as e:
+                print(f"⚠️ Warning during URL encoding: {str(e)}")
+        
+        # Generate settings
+        settings = VideoSettings(
+            model="lipsync-1.9.0-beta",
+            output_format="mp4",
+            resolution="portrait",
+            width=480,
+            height=854  # 9:16 aspect ratio for portrait videos
+        )
+        
+        # Generate video
+        result = avatar_agent.generate_video(
             audio_file=audio_file,
             avatar_name=avatar_name,
+            settings=settings,
             poll_for_completion=poll_for_completion,
             poll_interval=poll_interval,
             indefinite_polling=indefinite_polling,
@@ -153,19 +197,10 @@ def generate_avatar_video(audio_file, avatar_name, sync_api_key,
             audio_url=audio_url
         )
         
-        # Log success or failure
-        if video_result and video_result.video_url:
-            print(f"✅ Video generation successful! URL: {video_result.video_url}")
-            return video_result
-        elif video_result:
-            print(f"⏳ Video generation job submitted with ID: {video_result.job_id}, Status: {video_result.status}")
-            return video_result
-        else:
-            print(f"❌ Video generation failed with unknown error.")
-            return None
+        return result
     except Exception as e:
-        print(f"❌ Error in video generation: {str(e)}")
-        traceback.print_exc()
+        print(f"❌ Error generating avatar video: {str(e)}")
+        st.error(f"❌ Error generating avatar video: {str(e)}")
         return None
 
 def main():
@@ -235,17 +270,18 @@ def main():
                         
                         # Generate audio
                         audio_status.warning("🎵 Audio: Generating...")
-                        audio_file = generate_audio(script_result.content, audio_agent)
+                        audio_result = generate_audio(script_result.content, audio_agent)
                         
-                        if audio_file:
+                        if audio_result:
                             audio_status.success("🎵 Audio: Generated ✅")
                             
                             # Save to session state for the Generate tab
-                            st.session_state.generated_audio = audio_file
+                            st.session_state.generated_audio = audio_result['audio_file']
+                            st.session_state.generated_audio_url = audio_result['audio_url']
                             
                             # Show audio player in expandable section
                             with st.expander("🔊 Generated Audio"):
-                                st.audio(audio_file)
+                                st.audio(audio_result['audio_file'])
                                 
     # Generate tab                            
     with tab2:
@@ -257,8 +293,15 @@ def main():
         
         # Check if audio file exists in session state
         audio_file = None
+        audio_url = None
+        
         if hasattr(st.session_state, 'generated_audio'):
             audio_file = st.session_state.generated_audio
+            
+        if hasattr(st.session_state, 'generated_audio_url'):
+            audio_url = st.session_state.generated_audio_url
+            if audio_url:
+                st.success(f"✅ Using automatically uploaded audio URL: {audio_url}")
         
         if not audio_file:
             # Allow manual audio upload as fallback
@@ -276,169 +319,192 @@ def main():
                 
                 st.success(f"Audio file uploaded and saved to {audio_file}")
         
-        if audio_file:
-            # Avatar section
-            st.subheader("👱‍♀️ Avatar")
-            available_avatars = avatar_agent.get_available_avatars()
-            selected_avatar = available_avatars[0]  # Auto-select the only avatar
-            
-            # Show avatar info
-            st.write("Using avatar:")
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                # Show avatar preview image
-                avatar_info = avatar_agent.get_avatar_info(selected_avatar)
-                if avatar_info and "image" in avatar_info:
-                    st.image(avatar_info["image"], width=200)
-            with col2:
-                st.write(f"**Name:** {selected_avatar}")
-                st.write(f"**Style:** {avatar_info['style']}")
-                st.write(f"**Personality:** {avatar_info['personality']}")
-                st.write(f"**Description:** {avatar_info['description']}")
-            
-            # Add generation options
-            with st.expander("⚙️ Generation Options", expanded=True):
-                poll_option = st.radio(
-                    "Generation Mode:",
-                    ["Submit job and continue", "Wait with timeout", "Wait indefinitely"],
-                    index=0,  # Default to submit and continue
-                    help="Choose whether to wait for the video to complete or submit the job and check later"
-                )
+        # Avatar selection
+        st.subheader("👤 Avatar Selection")
+        
+        # Get available avatars
+        avatars = avatar_agent.get_available_avatars()
+        
+        if not avatars:
+            st.error("No avatars found! Please check the `avatars` directory.")
+            return
+        
+        # Get avatar info dictionary for each avatar name
+        avatar_info_dict = {}
+        for avatar_name in avatars:
+            avatar_info_dict[avatar_name] = avatar_agent.get_avatar_info(avatar_name)
+        
+        # Display avatars with images if available
+        avatar_cols = st.columns(len(avatars))
+        
+        for i, avatar_name in enumerate(avatars):
+            with avatar_cols[i]:
+                st.write(f"**{avatar_name}**")
                 
-                poll_interval = st.slider(
-                    "Poll Interval (seconds):",
-                    min_value=5,
-                    max_value=60,
-                    value=15,
-                    help="How often to check job status if waiting for completion"
-                )
+                avatar_info = avatar_info_dict[avatar_name]
+                # Try to display image if available
+                image_path = avatar_info.get("image")
+                if image_path and os.path.exists(image_path):
+                    st.image(image_path, width=150)
+                elif image_path and image_path.startswith("http"):
+                    st.image(image_path, width=150)
+                else:
+                    st.info(f"[No preview image]")
                 
-                max_attempts = st.slider(
-                    "Maximum Polls:",
-                    min_value=5,
-                    max_value=120,
-                    value=40,
-                    help="Maximum number of times to check status (ignored if waiting indefinitely)"
-                )
-                
-                estimated_time = max_attempts * poll_interval
-                st.info(f"With these settings, will poll for up to {estimated_time} seconds (~{estimated_time/60:.1f} minutes)")
+                st.write(avatar_info.get("description", ""))
+        
+        # Avatar selection dropdown
+        selected_avatar = st.selectbox(
+            "Select Avatar:", 
+            avatars,
+            index=0
+        )
+        
+        if not audio_file:
+            st.warning("⚠️ Please generate or upload an audio file before proceeding.")
+            return
             
-            # Process polling options
-            poll_for_completion = poll_option in ["Wait with timeout", "Wait indefinitely"]
-            indefinite_polling = poll_option == "Wait indefinitely"
-            
-            # Add option for providing public audio URL
-            st.subheader("📝 Audio Options")
-            
-            # Pre-defined S3 URLs
-            preset_audio_url = "https://vectorverseevolve.s3.us-west-2.amazonaws.com/News_Script_20250329_033235.mp3"
-            
-            st.info("""
-            ### Audio URL Required
-            
-            Sync.so requires all audio files to be hosted on publicly accessible URLs.
-            
-            We'll use a pre-configured S3 URL for testing:
-            """)
-            
-            # Generate a suggested filename based on timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            suggested_name = f"News_Script_{timestamp}.mp3"
-            suggested_url = f"https://vectorverseevolve.s3.us-west-2.amazonaws.com/{suggested_name}"
-            
-            audio_url_option = st.radio(
-                "Choose audio URL option:",
-                ["Use existing S3 URL", "Input custom URL"],
-                index=0  # Default to using existing URL
+        # Add generation options
+        with st.expander("⚙️ Generation Options", expanded=True):
+            poll_option = st.radio(
+                "Generation Mode:",
+                ["Submit job and continue", "Wait with timeout", "Wait indefinitely"],
+                index=0,  # Default to submit and continue
+                help="Choose whether to wait for the video to complete or submit the job and check later"
             )
             
-            if audio_url_option == "Use existing S3 URL":
-                audio_public_url = preset_audio_url
-                st.success(f"Using: {audio_public_url}")
+            poll_interval = st.slider(
+                "Poll Interval (seconds):",
+                min_value=5,
+                max_value=60,
+                value=15,
+                help="How often to check job status if waiting for completion"
+            )
+            
+            max_attempts = st.slider(
+                "Maximum Polls:",
+                min_value=5,
+                max_value=120,
+                value=40,
+                help="Maximum number of times to check status (ignored if waiting indefinitely)"
+            )
+            
+            estimated_time = max_attempts * poll_interval
+            st.info(f"With these settings, will poll for up to {estimated_time} seconds (~{estimated_time/60:.1f} minutes)")
+        
+        # Process polling options
+        poll_for_completion = poll_option in ["Wait with timeout", "Wait indefinitely"]
+        indefinite_polling = poll_option == "Wait indefinitely"
+        
+        # Add option for providing public audio URL - only if we don't already have one
+        if not audio_url:
+            st.subheader("📝 Audio URL Options")
+            
+            # For audio, we need to use a public URL 
+            # Since we don't have direct upload support, we'll use a hosted solution
+            if audio_url:
+                # Don't re-encode the URL here since it's already encoded by the audio generator
+                print(f"🚀 DEBUG: Using provided audio URL: {audio_url}")
+                st.write(f"✅ Using provided audio URL: {audio_url}")
             else:
-                audio_public_url = st.text_input(
-                    "Custom audio URL:", 
-                    value=suggested_url,
-                    help="URL to your audio file hosted on AWS S3 or other public service"
+                st.error("⚠️ Audio file must be hosted on a public URL to work with Sync.so")
+                st.info("""
+                ### Upload Steps:
+                1. Upload your audio file to AWS S3 or similar service
+                2. Make it publicly accessible
+                3. Copy the public URL here
+                
+                Sync.so cannot access files from your local machine.
+                """)
+                
+                base_filename = os.path.basename(audio_file)
+                # Keep spaces in the suggested filename (don't replace with underscores)
+                suggested_name = f"News Script_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+                
+                audio_url = st.text_input(
+                    "Enter public URL for your audio file:",
+                    value=f"https://vectorverseevolve.s3.us-west-2.amazonaws.com/{urllib.parse.quote(suggested_name)}",
+                    help="Upload your audio file to AWS S3 and enter the URL here"
                 )
                 
-                st.info(f"""
-                **To use a custom URL:**
-                1. Upload the audio file at: `{audio_file}`
-                2. To a public hosting service (AWS S3, etc.)
-                3. Make it publicly accessible
-                4. Enter the URL above
+                if not audio_url:
+                    st.error("Please provide a public URL for your audio file")
+                    return None
+                
+                st.warning(f"""
+                ⚠️ Please ensure that you've uploaded your audio file to:
+                **{audio_url}**
+                
+                The file must be publicly accessible. This is a requirement from Sync.so.
                 """)
+        
+        if not audio_url:
+            st.error("Please provide a URL for your audio file")
+        
+        if st.button("Generate Video with Sync.so", use_container_width=True):
+            video_status = st.empty()
+            progress_bar = st.progress(0)
+            debug_status = st.empty()
             
-            if not audio_public_url:
-                st.error("Please provide a URL for your audio file")
-                audio_public_url = None
+            video_status.warning("🎥 Video: Starting generation process...")
+            progress_bar.progress(80)
             
-            if st.button("Generate Video with Sync.so", use_container_width=True):
-                video_status = st.empty()
-                progress_bar = st.progress(0)
-                debug_status = st.empty()
+            # Create status containers
+            upload_status = st.empty()
+            processing_status = st.empty()
+            completion_status = st.empty()
+            
+            with st.spinner("🎥 Creating lip-synced video..."):
+                # Generate video with options
+                video_result = generate_avatar_video(
+                    audio_file,
+                    selected_avatar,
+                    None,  # API key is handled in the agent
+                    poll_for_completion=poll_for_completion,
+                    poll_interval=poll_interval,
+                    indefinite_polling=indefinite_polling,
+                    max_attempts=max_attempts,
+                    audio_url=audio_url  # Use the audio URL (either from S3 upload or manual input)
+                )
                 
-                video_status.warning("🎥 Video: Starting generation process...")
-                progress_bar.progress(80)
-                
-                # Create status containers
-                upload_status = st.empty()
-                processing_status = st.empty()
-                completion_status = st.empty()
-                
-                with st.spinner("🎥 Creating lip-synced video..."):
-                    # Generate video with options
-                    video_result = generate_avatar_video(
-                        audio_file,
-                        selected_avatar,
-                        None,  # API key is handled in the agent
-                        poll_for_completion=poll_for_completion,
-                        poll_interval=poll_interval,
-                        indefinite_polling=indefinite_polling,
-                        max_attempts=max_attempts,
-                        audio_url=audio_public_url  # Always pass the URL, even if None
-                    )
-                    
-                    if video_result:
-                        if video_result.status == "COMPLETED" and video_result.video_url:
-                            # Video completed successfully
-                            video_status.success("🎥 Video: Done ✅")
-                            progress_bar.progress(100)
-                            debug_status.success(f"✅ Video generated: {video_result.video_url}")
-                            
-                            # Show completion message
-                            completion_status.success("✨ Video generation completed!")
-                            
-                            # Show video details
-                            with st.expander("🎬 Final Video", expanded=True):
-                                st.write("**Video URL:**")
-                                st.code(video_result.video_url)
-                                st.write("**Preview:**")
-                                st.video(video_result.video_url)
-                        else:
-                            # Job submitted but not completed yet
-                            video_status.info("🎥 Video: Job submitted ⏳")
-                            progress_bar.progress(85)
-                            debug_status.info(f"⏳ Job submitted with ID: {video_result.job_id}")
-                            
-                            # Show job information
-                            completion_status.info(f"""
-                                ### Job Submitted
-                                
-                                Your video generation job has been submitted to Sync.so.
-                                
-                                **Job ID:** `{video_result.job_id}`  
-                                **Status:** {video_result.status}
-                                
-                                You can check the status of your job in the Job Management tab.
-                            """)
+                if video_result:
+                    if video_result.status == "COMPLETED" and video_result.video_url:
+                        # Video completed successfully
+                        video_status.success("🎥 Video: Done ✅")
+                        progress_bar.progress(100)
+                        debug_status.success(f"✅ Video generated: {video_result.video_url}")
+                        
+                        # Show completion message
+                        completion_status.success("✨ Video generation completed!")
+                        
+                        # Show video details
+                        with st.expander("🎬 Final Video", expanded=True):
+                            st.write("**Video URL:**")
+                            st.code(video_result.video_url)
+                            st.write("**Preview:**")
+                            st.video(video_result.video_url)
                     else:
-                        video_status.error("🎥 Video: Failed ❌")
-                        progress_bar.progress(0)
-                        debug_status.error("❌ Video generation failed")
-                        completion_status.error("❌ Failed to generate video. Check debug information above.")
+                        # Job submitted but not completed yet
+                        video_status.info("🎥 Video: Job submitted ⏳")
+                        progress_bar.progress(85)
+                        debug_status.info(f"⏳ Job submitted with ID: {video_result.job_id}")
+                        
+                        # Show job information
+                        completion_status.info(f"""
+                            ### Job Submitted
+                            
+                            Your video generation job has been submitted to Sync.so.
+                            
+                            **Job ID:** `{video_result.job_id}`  
+                            **Status:** {video_result.status}
+                            
+                            You can check the status of your job in the Job Management tab.
+                        """)
+                else:
+                    video_status.error("🎥 Video: Failed ❌")
+                    progress_bar.progress(0)
+                    debug_status.error("❌ Video generation failed")
+                    completion_status.error("❌ Failed to generate video. Check debug information above.")
 
     # Job management tab
     with tab3:

@@ -5,6 +5,9 @@ import os
 import json
 import requests
 from datetime import datetime
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
+import urllib.parse
 
 class AudioRequest(BaseModel):
     """Request model for audio generation."""
@@ -12,6 +15,9 @@ class AudioRequest(BaseModel):
     title: str = Field(description="Title for the audio file")
     voice_id: str = Field(default="21m00Tcm4TlvDq8ikWAM", description="ElevenLabs voice ID")
     output_dir: str = Field(default="generated_audio", description="Output directory for audio files")
+    upload_to_s3: bool = Field(default=False, description="Whether to upload the audio to S3")
+    s3_bucket: str = Field(default="vectorverseevolve", description="S3 bucket to upload to")
+    s3_region: str = Field(default="us-west-2", description="AWS region of the S3 bucket")
 
 class SubtitleOptions(BaseModel):
     """Options for subtitle generation."""
@@ -26,6 +32,7 @@ class AudioResult(BaseModel):
     srt_file: str = Field(description="Path to the SRT subtitle file")
     script_text: str = Field(description="The script text")
     duration: float = Field(description="Estimated duration in seconds")
+    audio_url: str = Field(default=None, description="Public URL for the audio file (if uploaded to S3)")
 
 class AudioGenerationAgent:
     """Agent for generating audio content."""
@@ -48,6 +55,53 @@ class AudioGenerationAgent:
             system_prompt="Generate audio content and subtitles from text."
         )
 
+    def upload_to_s3(self, file_path: str, bucket: str, region: str) -> str:
+        """Upload a file to AWS S3 and return the public URL.
+        
+        Args:
+            file_path: Local path to the file
+            bucket: S3 bucket name
+            region: AWS region
+            
+        Returns:
+            str: Public URL of the uploaded file
+        
+        Raises:
+            Exception: If the upload fails
+        """
+        try:
+            s3_client = boto3.client('s3', region_name=region)
+            
+            # Extract filename from path
+            filename = os.path.basename(file_path)
+            
+            # Set content type based on file extension
+            content_type = 'audio/mpeg'  # Default for mp3 files
+            if file_path.endswith('.wav'):
+                content_type = 'audio/wav'
+            elif file_path.endswith('.mp3'):
+                content_type = 'audio/mpeg'
+            
+            print(f"Uploading {filename} to S3 with content-type: {content_type}")
+            
+            # Upload the file with proper content type metadata
+            s3_client.upload_file(
+                file_path, 
+                bucket, 
+                filename,
+                ExtraArgs={'ContentType': content_type}
+            )
+            
+            # Generate URL with simple formatting (AWS handles URL encoding)
+            s3_url = f"https://{bucket}.s3.{region}.amazonaws.com/{filename}"
+            
+            print(f"Uploaded {filename} to S3. Public URL: {s3_url}")
+            return s3_url
+            
+        except Exception as e:
+            print(f"Failed to upload to S3: {str(e)}")
+            raise
+
     def generate_audio_content(self, request: AudioRequest) -> AudioResult:
         """Generate audio content from text."""
         try:
@@ -56,6 +110,9 @@ class AudioGenerationAgent:
             
             # Generate unique filenames
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Preserve the original title with spaces for the filename
+            # S3 handles spaces fine in object keys
             audio_file = os.path.join(request.output_dir, f"{request.title}_{timestamp}.mp3")
             script_file = os.path.join(request.output_dir, f"{request.title}_{timestamp}.txt")
             srt_file = os.path.join(request.output_dir, f"{request.title}_{timestamp}.srt")
@@ -98,13 +155,38 @@ class AudioGenerationAgent:
                 words = len(request.text.split())
                 duration = words / 2.5  # Assuming 2.5 words per second
                 
-                return AudioResult(
+                # Create result object
+                result = AudioResult(
                     audio_file=audio_file,
                     script_file=script_file,
                     srt_file=srt_file,
                     script_text=request.text,
                     duration=duration
                 )
+                
+                # Upload to S3 if requested
+                if request.upload_to_s3:
+                    try:
+                        # Check for AWS credentials
+                        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+                        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+                        
+                        if not aws_access_key or not aws_secret_key:
+                            print("⚠️ Warning: AWS credentials not found. Skipping S3 upload.")
+                            print("Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables to enable S3 upload.")
+                        else:
+                            audio_url = self.upload_to_s3(
+                                audio_file, 
+                                request.s3_bucket, 
+                                request.s3_region
+                            )
+                            result.audio_url = audio_url
+                            print(f"Audio uploaded to S3: {audio_url}")
+                    except Exception as e:
+                        print(f"Error uploading to S3: {str(e)}")
+                        # Continue even if S3 upload fails
+                
+                return result
             else:
                 print(f"ElevenLabs API error: {response.status_code} - {response.text}")
                 return None

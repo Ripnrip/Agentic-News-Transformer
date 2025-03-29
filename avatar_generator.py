@@ -29,8 +29,21 @@ class AvatarGenerationAgent:
     def __init__(self):
         """Initialize the avatar generation agent."""
         self.sync_api_key = os.getenv("SYNC_SO_API_KEY")
+        
+        # Debug: Check if API key was loaded
+        print("\n===========================================================")
+        print("🔑 DEBUG: Initializing AvatarGenerationAgent")
+        
         if not self.sync_api_key:
+            print("❌ ERROR: SYNC_SO_API_KEY environment variable not set!")
             raise ValueError("SYNC_SO_API_KEY environment variable not set")
+        else:
+            # Show first/last few characters of the API key for debugging
+            key_length = len(self.sync_api_key)
+            masked_key = f"{self.sync_api_key[:4]}...{self.sync_api_key[-4:]}" if key_length > 8 else "too_short"
+            print(f"✅ SYNC_SO_API_KEY loaded: {masked_key} (length: {key_length})")
+        
+        print("===========================================================\n")
         
         # Get the project root directory (where this file is located)
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -72,10 +85,40 @@ class AvatarGenerationAgent:
 
     def _verify_avatar_files(self):
         """Verify that all avatar files exist.
-        Skips validation entirely for remote URLs."""
-        # We're completely skipping file validation since we're using S3 URLs
-        # This prevents FileNotFoundError when initializing the agent
-        pass
+        Skips validation for URLs. Only validates local files."""
+        missing_files = []
+        
+        # Check only local files, completely skip remote URLs
+        for avatar_name, avatar_info in self.avatars.items():
+            image_url = avatar_info.get("image")
+            video_url = avatar_info.get("video")
+            
+            # Skip URL validation entirely - we trust they exist
+            if image_url and image_url.startswith(("http://", "https://")):
+                # For URLs, we'll just check that they're properly formatted
+                print(f"🔍 Skipping validation for remote image URL: {image_url}")
+                continue
+                    
+            if video_url and video_url.startswith(("http://", "https://")):
+                # For URLs, we'll just check that they're properly formatted
+                print(f"🔍 Skipping validation for remote video URL: {video_url}")
+                continue
+                
+            # Only check local files
+            if image_url and not image_url.startswith(("http://", "https://")):
+                if not os.path.exists(image_url):
+                    missing_files.append(image_url)
+                    
+            if video_url and not video_url.startswith(("http://", "https://")):
+                if not os.path.exists(video_url):
+                    missing_files.append(video_url)
+        
+        # If any local files are missing, raise an error
+        if missing_files:
+            print(f"⚠️ Missing avatar files: {', '.join(missing_files)}")
+            print(f"Project root: {os.path.dirname(self.project_root)}")
+            # Instead of raising an error, just print a warning
+            print("⚠️ Will attempt to continue with remote URLs only")
 
     def get_available_avatars(self) -> list:
         """Get list of available avatars."""
@@ -147,19 +190,19 @@ class AvatarGenerationAgent:
                      poll_for_completion: bool = True, poll_interval: int = 10, 
                      indefinite_polling: bool = False, max_attempts: int = 30,
                      audio_url: str = None) -> VideoResult:
-        """Generate lip-synced video using Sync.so API.
-        
-        Args:
-            audio_file: Path to the audio file
-            avatar_name: Name of the avatar to use
-            settings: Video generation settings
-            poll_for_completion: Whether to poll for completion or return immediately
-            poll_interval: Interval between polls in seconds
-            indefinite_polling: If True, will poll indefinitely until job completes
-            max_attempts: Maximum number of polling attempts (ignored if indefinite_polling=True)
-            audio_url: Public URL for the audio file
-        """
+        """Generate lip-synced video using Sync.so API."""
         try:
+            print("\n\n===========================================================")
+            print("🚀 DEBUG: Starting generate_video method with parameters:")
+            print(f"🚀 DEBUG: audio_file = {audio_file}")
+            print(f"🚀 DEBUG: avatar_name = {avatar_name}")
+            print(f"🚀 DEBUG: poll_for_completion = {poll_for_completion}")
+            print(f"🚀 DEBUG: poll_interval = {poll_interval}")
+            print(f"🚀 DEBUG: indefinite_polling = {indefinite_polling}")
+            print(f"🚀 DEBUG: max_attempts = {max_attempts}")
+            print(f"🚀 DEBUG: audio_url = {audio_url}")
+            print("===========================================================\n\n")
+            
             st.write("🎬 Starting video generation process...")
             
             # Get avatar info
@@ -179,6 +222,7 @@ class AvatarGenerationAgent:
                                         help="Use this for testing the API without hosting your own files")
             
             if use_test_files:
+                print("🚀 DEBUG: Using test files")
                 st.info("Using example files from Sync.so documentation for testing")
                 audio_url = "https://synchlabs-public.s3.us-west-2.amazonaws.com/david_demo_shortaud-27623a4f-edab-4c6a-8383-871b18961a4a.wav"
                 video_url = "https://synchlabs-public.s3.us-west-2.amazonaws.com/david_demo_shortvid-03a10044-7741-4cfc-816a-5bccd392d1ee.mp4"
@@ -186,10 +230,12 @@ class AvatarGenerationAgent:
             else:
                 # For avatar video, we already have the URL in avatar_info
                 video_url = avatar_info["video"]
+                print(f"🚀 DEBUG: Using avatar video URL: {video_url}")
                 
                 # For audio, we need to use a public URL 
                 # Since we don't have direct upload support, we'll use a hosted solution
                 if audio_url:
+                    print(f"🚀 DEBUG: Using provided audio URL: {audio_url}")
                     st.write(f"✅ Using provided audio URL: {audio_url}")
                 else:
                     st.error("⚠️ Audio file must be hosted on a public URL to work with Sync.so")
@@ -223,27 +269,33 @@ class AvatarGenerationAgent:
                     """)
                 
                 st.write(f"✅ Using video URL: {video_url}")
-                
-                if st.button("Confirm URLs are ready", help="Click when you've confirmed your audio file is uploaded and public"):
-                    st.success("✅ URLs confirmed! Proceeding with video generation.")
-                else:
-                    st.stop()  # Stop execution until the user confirms
             
             # Step 2: Start video generation
+            print("\n\n===========================================================")
+            print("🚀 DEBUG: About to start video generation")
+            print(f"🚀 DEBUG: Using audio URL: {audio_url}")
+            print(f"🚀 DEBUG: Using video URL: {video_url}")
+            print("===========================================================\n\n")
+            
             st.write("🎥 Starting lip-sync process...")
             st.write("Audio URL:", audio_url)
             st.write("Video URL:", video_url)
             
+            print("🚀 DEBUG: About to call _start_generation method")
             generation_response = self._start_generation(
                 audio_url=audio_url,
                 video_url=video_url,
                 settings=settings
             )
+            print(f"🚀 DEBUG: _start_generation returned: {generation_response}")
             
             if not generation_response or not generation_response.get("job_id"):
+                print("🚀 DEBUG: No valid response or job_id received")
                 raise Exception("Failed to start video generation. Response doesn't contain job ID.")
             
-            job_id = generation_response["job_id"]
+            # Extract ID based on the actual response structure
+            job_id = generation_response.get("job_id") or generation_response.get("id")
+            print(f"🚀 DEBUG: Job ID extracted: {job_id}")
             st.write(f"✅ Generation job started (ID: {job_id})")
             
             # Save job info
@@ -263,6 +315,7 @@ class AvatarGenerationAgent:
             
             # Step 3: Poll for completion if requested
             if poll_for_completion:
+                print(f"🚀 DEBUG: Starting polling with indefinite_polling={indefinite_polling}")
                 if indefinite_polling:
                     st.write("⏳ Polling indefinitely until job completes...")
                 else:
@@ -298,12 +351,14 @@ class AvatarGenerationAgent:
                     )
             else:
                 # Return right away with the job ID
+                print("🚀 DEBUG: Returning immediately with job ID")
                 return VideoResult(
                     job_id=job_id,
                     status=generation_response.get("status", "PENDING")
                 )
             
         except Exception as e:
+            print(f"🚀 DEBUG ERROR: {str(e)}")
             st.error(f"❌ Error in video generation: {str(e)}")
             raise
 
@@ -331,16 +386,31 @@ class AvatarGenerationAgent:
     def _start_generation(self, audio_url: str, video_url: str, settings: VideoSettings = None) -> dict:
         """Start video generation job."""
         try:
+            print(f"\n🎥 SYNC.SO API REQUEST:")
+            print(f"🔗 API Endpoint: {self.base_url}/generate")
+            
+            # Clean up URLs to ensure proper encoding
+            import urllib.parse
+            
+            # Fix double-encoded URLs if present
+            if "%25" in audio_url:
+                print("🔍 Detected potentially double-encoded URL, fixing...")
+                audio_url = audio_url.replace("%2520", "%20")
+                audio_url = audio_url.replace("%252F", "%2F")
+                print(f"🔧 Fixed audio URL: {audio_url}")
+            
             data = {
                 "model": settings.model if settings else "lipsync-1.9.0-beta",
                 "input": [
                     {
                         "type": "video",
-                        "url": video_url
+                        "url": video_url,
+                        "content_type": "video/mp4"  # Explicitly specify MIME type
                     },
                     {
                         "type": "audio",
-                        "url": audio_url
+                        "url": audio_url,
+                        "content_type": "audio/mpeg"  # Explicitly specify MIME type for mp3
                     }
                 ],
                 "options": {
@@ -352,21 +422,63 @@ class AvatarGenerationAgent:
                 }
             }
             
+            # Pretty print the request payload for console debugging
+            import json
+            print(f"📊 Request Payload:")
+            print(json.dumps(data, indent=2))
+            
             st.code(str(data), language="json")
             
+            print(f"🔄 Sending API request to Sync.so...")
             response = requests.post(
                 f"{self.base_url}/generate",
                 headers=self.headers,
                 json=data
             )
+            
+            # Always log response status
+            print(f"📡 Response Status: {response.status_code}")
+            
+            # Try to raise for HTTP errors
             response.raise_for_status()
             
+            # Parse response
+            response_json = response.json()
+            
             # Log the response for debugging
+            print(f"🔄 API Response:")
+            print(json.dumps(response_json, indent=2))
+            
             st.write("🔄 API Response:")
             st.code(response.text, language="json")
             
-            return response.json()
+            # Check if job ID exists (try both "job_id" and "id" fields)
+            job_id = response_json.get("job_id") or response_json.get("id")
+            if job_id:
+                print(f"✅ Job created successfully! Job ID: {job_id}")
+                # Add the job_id field if it's not there but id is
+                if "job_id" not in response_json and "id" in response_json:
+                    response_json["job_id"] = response_json["id"]
+            else:
+                print(f"⚠️ Warning: Response doesn't contain job_id or id field: {response_json}")
+            
+            return response_json
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"HTTP Error: {str(e)}"
+            print(f"❌ {error_msg}")
+            st.error(f"❌ Generation start failed: {error_msg}")
+            
+            # Try to parse error response
+            try:
+                error_json = e.response.json()
+                print(f"Error details: {json.dumps(error_json, indent=2)}")
+                st.error(f"Error details: {error_json}")
+            except:
+                print("Could not parse error response as JSON")
+            
+            return None
         except Exception as e:
+            print(f"❌ Generation start failed: {str(e)}")
             st.error(f"❌ Generation start failed: {str(e)}")
             return None
 
