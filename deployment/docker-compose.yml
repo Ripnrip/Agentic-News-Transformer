@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  agentic-content-transformer:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    ports:
+      - "8501:8501"
+    restart: always
+    environment:
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - SYNC_SO_API_KEY=${SYNC_SO_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NEWS_DATA_HUB_KEY=${NEWS_DATA_HUB_KEY}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+    volumes:
+      - app-data:/app/data
+
+volumes:
+  app-data: 

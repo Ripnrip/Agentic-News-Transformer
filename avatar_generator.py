@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 import requests
 import streamlit as st
+import boto3
+import json
 
 class VideoSettings(BaseModel):
     """Settings for video generation."""
@@ -18,10 +20,17 @@ class VideoSettings(BaseModel):
 
 class VideoResult(BaseModel):
     """Result of video generation."""
-    video_url: Optional[str] = Field(None, description="URL of the generated video")
-    duration: float = Field(default=0, description="Duration of the video in seconds")
-    job_id: str = Field(description="Sync.so job ID")
-    status: str = Field(default="PENDING", description="Current status of the job")
+    job_id: str
+    status: str
+    video_url: Optional[str] = None
+    s3_video_url: Optional[str] = None  # Added S3 URL field
+    error: Optional[str] = None
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if video generation is completed."""
+        return self.status == "COMPLETED" and self.video_url is not None
 
 class AvatarGenerationAgent:
     """Agent for generating lip-synced avatar videos."""
@@ -132,7 +141,6 @@ class AvatarGenerationAgent:
         """Save job information to a JSON file."""
         job_file = os.path.join(self.jobs_dir, f"{job_id}.json")
         with open(job_file, "w") as f:
-            import json
             json.dump({
                 "id": job_id,
                 "created_at": datetime.now().isoformat(),
@@ -146,7 +154,6 @@ class AvatarGenerationAgent:
         job_file = os.path.join(self.jobs_dir, f"{job_id}.json")
         if os.path.exists(job_file):
             with open(job_file, "r") as f:
-                import json
                 job_info = json.load(f)
                 
             job_info["last_checked"] = datetime.now().isoformat()
@@ -163,7 +170,6 @@ class AvatarGenerationAgent:
             if file.endswith(".json"):
                 job_file = os.path.join(self.jobs_dir, file)
                 with open(job_file, "r") as f:
-                    import json
                     job_info = json.load(f)
                     jobs.append(job_info)
         return jobs
@@ -201,166 +207,127 @@ class AvatarGenerationAgent:
             print(f"🚀 DEBUG: indefinite_polling = {indefinite_polling}")
             print(f"🚀 DEBUG: max_attempts = {max_attempts}")
             print(f"🚀 DEBUG: audio_url = {audio_url}")
-            print("===========================================================\n\n")
+            print("===========================================================")
             
-            st.write("🎬 Starting video generation process...")
+            # Step 1: Get avatar URLs from the registry
+            avatar_video_url = self.get_avatar_video(avatar_name)
+            print(f"🚀 DEBUG: Using avatar video URL: {avatar_video_url}")
             
-            # Get avatar info
-            avatar_info = self.avatars.get(avatar_name)
-            if not avatar_info:
-                raise ValueError(f"Avatar '{avatar_name}' not found")
-            
-            # For local audio file, we need to get the path but we'll skip the upload
-            audio_path = os.path.abspath(audio_file)
-            
-            # Verify audio file exists
-            if not os.path.exists(audio_path):
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-            # Use test files from Sync.so or use AWS S3 URLs
-            use_test_files = st.checkbox("Use test files from Sync.so documentation", value=False, 
-                                        help="Use this for testing the API without hosting your own files")
-            
-            if use_test_files:
-                print("🚀 DEBUG: Using test files")
-                st.info("Using example files from Sync.so documentation for testing")
-                audio_url = "https://synchlabs-public.s3.us-west-2.amazonaws.com/david_demo_shortaud-27623a4f-edab-4c6a-8383-871b18961a4a.wav"
-                video_url = "https://synchlabs-public.s3.us-west-2.amazonaws.com/david_demo_shortvid-03a10044-7741-4cfc-816a-5bccd392d1ee.mp4"
-                st.write("✅ Using test files")
+            # For audio, we need to use a public URL 
+            # Since we don't have direct upload support, we'll use a hosted solution
+            if audio_url:
+                print(f"🚀 DEBUG: Using provided audio URL: {audio_url}")
+                st.write(f"✅ Using audio URL: {audio_url}")
             else:
-                # For avatar video, we already have the URL in avatar_info
-                video_url = avatar_info["video"]
-                print(f"🚀 DEBUG: Using avatar video URL: {video_url}")
+                st.error("⚠️ Audio file must be hosted on a public URL to work with Sync.so")
+                st.info("""
+                ### Upload Steps:
+                1. Upload your audio file to AWS S3 or similar service
+                2. Make it publicly accessible
+                3. Copy the public URL here
                 
-                # For audio, we need to use a public URL 
-                # Since we don't have direct upload support, we'll use a hosted solution
-                if audio_url:
-                    print(f"🚀 DEBUG: Using provided audio URL: {audio_url}")
-                    st.write(f"✅ Using provided audio URL: {audio_url}")
-                else:
-                    st.error("⚠️ Audio file must be hosted on a public URL to work with Sync.so")
-                    st.info("""
-                    ### Upload Steps:
-                    1. Upload your audio file to AWS S3 or similar service
-                    2. Make it publicly accessible
-                    3. Copy the public URL here
-                    
-                    Sync.so cannot access files from your local machine.
-                    """)
-                    
-                    base_filename = os.path.basename(audio_path)
-                    suggested_name = f"News_Script_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-                    
-                    audio_url = st.text_input(
-                        "Enter public URL for your audio file:",
-                        value=f"https://vectorverseevolve.s3.us-west-2.amazonaws.com/{suggested_name}",
-                        help="Upload your audio file to AWS S3 and enter the URL here"
-                    )
-                    
-                    if not audio_url:
-                        st.error("Please provide a public URL for your audio file")
-                        return None
-                    
-                    st.warning(f"""
-                    ⚠️ Please ensure that you've uploaded your audio file to:
-                    **{audio_url}**
-                    
-                    The file must be publicly accessible. This is a requirement from Sync.so.
-                    """)
+                Sync.so cannot access files from your local machine.
+                """)
                 
-                st.write(f"✅ Using video URL: {video_url}")
+                base_filename = os.path.basename(audio_file)
+                suggested_name = f"News_Script_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+                
+                audio_url = st.text_input(
+                    "Enter public URL for your audio file:",
+                    value=f"https://vectorverseevolve.s3.us-west-2.amazonaws.com/{suggested_name}",
+                    help="Upload your audio file to AWS S3 and enter the URL here"
+                )
+                
+                if not audio_url:
+                    st.error("Please provide a public URL for your audio file")
+                    return None
+                
+                st.warning(f"""
+                ⚠️ Please ensure that you've uploaded your audio file to:
+                **{audio_url}**
+                
+                The file must be publicly accessible. This is a requirement from Sync.so.
+                """)
+            
+            st.write(f"✅ Using video URL: {avatar_video_url}")
             
             # Step 2: Start video generation
             print("\n\n===========================================================")
             print("🚀 DEBUG: About to start video generation")
             print(f"🚀 DEBUG: Using audio URL: {audio_url}")
-            print(f"🚀 DEBUG: Using video URL: {video_url}")
-            print("===========================================================\n\n")
-            
-            st.write("🎥 Starting lip-sync process...")
-            st.write("Audio URL:", audio_url)
-            st.write("Video URL:", video_url)
+            print(f"🚀 DEBUG: Using video URL: {avatar_video_url}")
+            print("===========================================================")
             
             print("🚀 DEBUG: About to call _start_generation method")
-            generation_response = self._start_generation(
+            response = self._start_generation(
                 audio_url=audio_url,
-                video_url=video_url,
+                video_url=avatar_video_url,
                 settings=settings
             )
-            print(f"🚀 DEBUG: _start_generation returned: {generation_response}")
             
-            if not generation_response or not generation_response.get("job_id"):
-                print("🚀 DEBUG: No valid response or job_id received")
-                raise Exception("Failed to start video generation. Response doesn't contain job ID.")
+            print(f"🚀 DEBUG: _start_generation returned: {response}")
             
-            # Extract ID based on the actual response structure
-            job_id = generation_response.get("job_id") or generation_response.get("id")
+            if not response:
+                print("🚀 DEBUG: No valid response received")
+                return VideoResult(
+                    job_id="error",
+                    status="FAILED",
+                    error="Failed to start video generation. No response received."
+                )
+            
+            # Extract job ID
+            job_id = response.get("job_id") or response.get("id")
+            if not job_id:
+                print("🚀 DEBUG: No valid job_id received")
+                return VideoResult(
+                    job_id="error",
+                    status="FAILED",
+                    error="Failed to start video generation. Response doesn't contain job ID."
+                )
+                
             print(f"🚀 DEBUG: Job ID extracted: {job_id}")
-            st.write(f"✅ Generation job started (ID: {job_id})")
             
-            # Save job info
-            self._save_job_info(job_id, generation_response)
+            # Save initial job status
+            self._save_job_status(job_id, response)
             
-            # Create job info display
-            job_info = st.empty()
-            job_info.info(f"""
-                🎬 **Video Generation Job Started**
-                
-                - **Job ID:** `{job_id}`
-                - **Status:** {generation_response.get('status', 'PENDING')}
-                - **Created:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-                
-                You can check the status later using the job ID.
-            """)
-            
-            # Step 3: Poll for completion if requested
+            # Poll for job completion if requested
             if poll_for_completion:
                 print(f"🚀 DEBUG: Starting polling with indefinite_polling={indefinite_polling}")
-                if indefinite_polling:
-                    st.write("⏳ Polling indefinitely until job completes...")
-                else:
-                    st.write(f"⏳ Polling for completion every {poll_interval} seconds (up to {max_attempts} attempts)...")
-                
-                result = self._poll_generation_status(
-                    job_id, 
+                job_info = self._poll_job_status(
+                    job_id=job_id,
+                    polling_interval=poll_interval,
                     max_attempts=max_attempts,
-                    poll_interval=poll_interval,
-                    indefinite_polling=indefinite_polling
+                    indefinite=indefinite_polling
                 )
                 
-                if result and result.get("video_url"):
-                    st.write("✅ Video generation completed!")
-                    return VideoResult(
-                        video_url=result["video_url"],
-                        duration=result.get("duration", 0),
-                        job_id=job_id,
-                        status="COMPLETED"
-                    )
-                else:
-                    job_info.warning(f"""
-                        ⚠️ **Video Generation Not Completed**
-                        
-                        - **Job ID:** `{job_id}`
-                        - **Status:** INCOMPLETE
-                        
-                        You can check the status later using the job ID.
-                    """)
-                    return VideoResult(
-                        job_id=job_id,
-                        status="PROCESSING"
-                    )
-            else:
-                # Return right away with the job ID
-                print("🚀 DEBUG: Returning immediately with job ID")
+                status = job_info.get("status", "UNKNOWN")
+                output_url = job_info.get("outputUrl")
+                s3_video_url = job_info.get("s3_video_url")
+                
                 return VideoResult(
                     job_id=job_id,
-                    status=generation_response.get("status", "PENDING")
+                    status=status,
+                    video_url=output_url,
+                    s3_video_url=s3_video_url,
+                    error=job_info.get("error")
                 )
-            
+            else:
+                # Return immediately without polling
+                return VideoResult(
+                    job_id=job_id,
+                    status=response.get("status", "PENDING")
+                )
+                
         except Exception as e:
-            print(f"🚀 DEBUG ERROR: {str(e)}")
-            st.error(f"❌ Error in video generation: {str(e)}")
-            raise
+            print(f"❌ Error generating avatar video: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            return VideoResult(
+                job_id="error",
+                status="FAILED",
+                error=str(e)
+            )
 
     def _upload_file(self, file_path: str, content_type: str) -> dict:
         """Upload a file to Sync.so.
@@ -427,7 +394,18 @@ class AvatarGenerationAgent:
             print(f"📊 Request Payload:")
             print(json.dumps(data, indent=2))
             
-            st.code(str(data), language="json")
+            # Show API request details in Streamlit UI
+            st.subheader("🔄 Sync.so API Request")
+            st.info("Sending request to Sync.so API for lip-sync video generation...")
+            
+            with st.expander("📤 API Request Details", expanded=False):
+                st.write("**Endpoint:** `https://api.sync.so/v2/generate`")
+                st.write("**Video URL:**")
+                st.code(video_url)
+                st.write("**Audio URL:**")
+                st.code(audio_url)
+                st.write("**Full Request:**")
+                st.json(data)
             
             print(f"🔄 Sending API request to Sync.so...")
             response = requests.post(
@@ -440,7 +418,16 @@ class AvatarGenerationAgent:
             print(f"📡 Response Status: {response.status_code}")
             
             # Try to raise for HTTP errors
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                print(f"❌ HTTP Error: {e}")
+                print(f"Error details: {response.text}")
+                
+                # Show error in UI
+                st.error(f"API Error: {e}")
+                st.error(f"Details: {response.text}")
+                return None
             
             # Parse response
             response_json = response.json()
@@ -449,34 +436,24 @@ class AvatarGenerationAgent:
             print(f"🔄 API Response:")
             print(json.dumps(response_json, indent=2))
             
-            st.write("🔄 API Response:")
-            st.code(response.text, language="json")
+            # Show response in UI
+            st.subheader("🔄 Sync.so API Response")
+            with st.expander("📥 API Response Details", expanded=True):
+                st.json(response_json)
             
             # Check if job ID exists (try both "job_id" and "id" fields)
             job_id = response_json.get("job_id") or response_json.get("id")
             if job_id:
                 print(f"✅ Job created successfully! Job ID: {job_id}")
+                st.success(f"✅ Job created successfully! Job ID: `{job_id}`")
                 # Add the job_id field if it's not there but id is
                 if "job_id" not in response_json and "id" in response_json:
                     response_json["job_id"] = response_json["id"]
             else:
                 print(f"⚠️ Warning: Response doesn't contain job_id or id field: {response_json}")
+                st.warning("⚠️ Warning: Response doesn't contain job_id or id field")
             
             return response_json
-        except requests.exceptions.HTTPError as e:
-            error_msg = f"HTTP Error: {str(e)}"
-            print(f"❌ {error_msg}")
-            st.error(f"❌ Generation start failed: {error_msg}")
-            
-            # Try to parse error response
-            try:
-                error_json = e.response.json()
-                print(f"Error details: {json.dumps(error_json, indent=2)}")
-                st.error(f"Error details: {error_json}")
-            except:
-                print("Could not parse error response as JSON")
-            
-            return None
         except Exception as e:
             print(f"❌ Generation start failed: {str(e)}")
             st.error(f"❌ Generation start failed: {str(e)}")
@@ -563,4 +540,204 @@ class AvatarGenerationAgent:
         else:
             status_text.warning(f"⚠️ Reached maximum polling attempts ({max_attempts}). The job is still running and you can check its status later.")
         
-        return None 
+        return None
+
+    def _poll_job_status(self, job_id: str, polling_interval: int = 10, max_attempts: int = 30, indefinite: bool = False) -> dict:
+        """Poll the job status until completion, failure, or timeout."""
+        attempts = 0
+        
+        # Add a status container in Streamlit UI for debugging
+        st.subheader("🔄 Job Status Monitoring")
+        status_container = st.empty()
+        status_container.info(f"Starting to poll job status for job: {job_id}")
+        
+        debug_container = st.container()
+        with debug_container:
+            st.write("**Debug Log:**")
+            log_area = st.empty()
+            
+        log_messages = []
+        
+        def update_log(message):
+            log_messages.append(f"{datetime.now().strftime('%H:%M:%S')} - {message}")
+            log_area.code("\n".join(log_messages), language="bash")
+            print(message)  # Also print to console for terminal logs
+        
+        update_log(f"Job polling started for job ID: {job_id}")
+        if indefinite:
+            update_log("Polling indefinitely until job completes")
+        else:
+            update_log(f"Will poll for {max_attempts} attempts ({max_attempts * polling_interval} seconds)")
+        
+        while indefinite or attempts < max_attempts:
+            try:
+                # IMPORTANT: Fix the API endpoint - use /generate/ not /generation/
+                response = requests.get(
+                    f"{self.base_url}/generate/{job_id}",
+                    headers=self.headers
+                )
+                
+                # Show status code
+                update_log(f"Poll {attempts+1}: Status Code {response.status_code}")
+                
+                # Handle non-200 responses properly
+                if response.status_code != 200:
+                    update_log(f"Error: {response.status_code} - {response.text}")
+                    if response.status_code == 404:
+                        update_log("404 Not Found. Check if job ID is correct.")
+                    
+                    # Display error in UI
+                    status_container.error(f"API Error: {response.status_code} {response.reason}")
+                    
+                    # If unauthorized or not found, no point continuing
+                    if response.status_code in [401, 403, 404]:
+                        update_log("Critical error, stopping polling")
+                        break
+                else:
+                    job_info = response.json()
+                    
+                    # Update saved job info
+                    self._save_job_status(job_id, job_info)
+                    
+                    # Log status
+                    status = job_info.get("status", "UNKNOWN")
+                    update_log(f"Job {job_id}: Status = {status}, Attempt {attempts + 1}")
+                    status_container.info(f"Job status: **{status}** (Poll {attempts+1})")
+                    
+                    # Check if job is done
+                    if status == "COMPLETED":
+                        output_url = job_info.get("outputUrl")
+                        if output_url:
+                            update_log(f"✅ Job completed! Video URL: {output_url}")
+                            status_container.success(f"Video generation complete!")
+                            
+                            # Download video and upload to S3
+                            try:
+                                # Download video from Sync.so
+                                update_log(f"⬇️ Downloading video from Sync.so...")
+                                video_response = requests.get(output_url)
+                                if video_response.status_code == 200:
+                                    # Create videos directory if it doesn't exist
+                                    os.makedirs("generated_videos", exist_ok=True)
+                                    
+                                    # Save video locally
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    local_video_path = f"generated_videos/sync_video_{timestamp}.mp4"
+                                    with open(local_video_path, "wb") as f:
+                                        f.write(video_response.content)
+                                    
+                                    update_log(f"✅ Video downloaded to {local_video_path}")
+                                    
+                                    # Upload to S3
+                                    try:
+                                        # Get S3 credentials from environment
+                                        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+                                        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+                                        s3_bucket = os.getenv("AWS_S3_BUCKET", "vectorverseevolve")
+                                        s3_region = os.getenv("AWS_S3_REGION", "us-west-2")
+                                        
+                                        if aws_access_key and aws_secret_key:
+                                            update_log(f"🚀 Uploading video to S3...")
+                                            
+                                            s3_client = boto3.client('s3', 
+                                                                  region_name=s3_region)
+                                            
+                                            # Extract filename from path
+                                            filename = os.path.basename(local_video_path)
+                                            
+                                            # Upload with proper content type
+                                            s3_client.upload_file(
+                                                local_video_path, 
+                                                s3_bucket, 
+                                                filename,
+                                                ExtraArgs={'ContentType': 'video/mp4'}
+                                            )
+                                            
+                                            # Generate S3 URL
+                                            s3_video_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{filename}"
+                                            
+                                            update_log(f"✅ Video uploaded to S3: {s3_video_url}")
+                                            status_container.success(f"Video also backed up to S3!")
+                                            
+                                            # Add S3 URL to job info
+                                            job_info["s3_video_url"] = s3_video_url
+                                            self._save_job_status(job_id, job_info)
+                                        else:
+                                            update_log("⚠️ AWS credentials not found. Skipping S3 upload.")
+                                    except Exception as e:
+                                        update_log(f"⚠️ Error uploading video to S3: {str(e)}")
+                                        # Continue even if S3 upload fails
+                                else:
+                                    update_log(f"⚠️ Failed to download video: Status code {video_response.status_code}")
+                            except Exception as e:
+                                update_log(f"⚠️ Error downloading video: {str(e)}")
+                        else:
+                            update_log("⚠️ Job completed but no output URL found.")
+                        
+                        return job_info
+                    elif status in ["FAILED", "REJECTED", "CANCELED", "TIMED_OUT"]:
+                        update_log(f"❌ Job failed! Status: {status}")
+                        update_log(f"Error details: {job_info.get('error', 'No error details')}")
+                        status_container.error(f"❌ Job failed: {status}")
+                        return job_info
+                
+                # Wait before next poll
+                update_log(f"⏳ Waiting for {polling_interval} seconds before next check...")
+                time.sleep(polling_interval)
+                attempts += 1
+                
+            except Exception as e:
+                update_log(f"❌ Error polling job status: {str(e)}")
+                status_container.error(f"❌ Error during polling: {str(e)}")
+                time.sleep(polling_interval)
+                attempts += 1
+        
+        update_log(f"⚠️ Maximum polling attempts reached ({max_attempts}). Job is still processing.")
+        status_container.warning(f"⚠️ Maximum polling attempts reached. Check job status later.")
+        return {"job_id": job_id, "status": "POLLING_TIMEOUT"}
+
+    def get_avatar_video(self, avatar_name: str) -> str:
+        """Get the video URL for the specified avatar.
+        
+        Args:
+            avatar_name: Name of the avatar
+            
+        Returns:
+            str: URL to the avatar video
+            
+        Raises:
+            ValueError: If avatar not found
+        """
+        avatar_info = self.avatars.get(avatar_name)
+        if not avatar_info:
+            raise ValueError(f"Avatar '{avatar_name}' not found")
+            
+        video_url = avatar_info.get("video")
+        if not video_url:
+            raise ValueError(f"Video URL not found for avatar '{avatar_name}'")
+            
+        return video_url 
+
+    def _save_job_status(self, job_id: str, job_info: dict) -> None:
+        """Save job status to disk.
+        
+        Args:
+            job_id: Job ID
+            job_info: Job information dictionary
+        """
+        try:
+            # Create jobs directory if it doesn't exist
+            os.makedirs(self.jobs_dir, exist_ok=True)
+            
+            # Add timestamp for when the status was last checked
+            job_info["last_checked"] = datetime.now().isoformat()
+            
+            # Write job info to file
+            job_file = os.path.join(self.jobs_dir, f"{job_id}.json")
+            with open(job_file, "w") as f:
+                json.dump(job_info, f, indent=2)
+                
+            print(f"✅ Job status saved to {job_file}")
+        except Exception as e:
+            print(f"⚠️ Error saving job status: {str(e)}")
+            # Continue even if saving fails 

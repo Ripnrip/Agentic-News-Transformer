@@ -20,6 +20,14 @@ from datetime import datetime
 from env_validator import validate_conda_env
 import traceback
 
+# Initialize session state for tab selection and caching
+if 'current_tab' not in st.session_state:
+    st.session_state.current_tab = 0  # Default to News tab (first tab)
+
+# Add URL caching to avoid reprocessing the same articles
+if 'processed_urls' not in st.session_state:
+    st.session_state.processed_urls = {}  # Dictionary to cache processed URLs
+
 # Initialize agents
 @st.cache_resource
 def init_agents():
@@ -208,205 +216,266 @@ def main():
     # Validate conda environment
     #validate_conda_env()
     
+    # Check if we need to switch tabs
+    if 'switch_to_tab' in st.session_state:
+        # Get the target tab index
+        target_tab = st.session_state.switch_to_tab
+        # Update the current tab
+        st.session_state.current_tab = target_tab
+        # Clear the switch flag to prevent loops
+        del st.session_state.switch_to_tab
+        
     # Initialize agents
     news_agent, content_agent, audio_agent, avatar_agent = init_agents()
     
     st.title("📺 News to Avatar Generator")
     st.write("Convert news articles to avatar videos with AI-generated scripts and lip-syncing.")
     
-    # Set up tabs
-    tab1, tab2, tab3 = st.tabs(["📰 News", "📺 Generate", "🔄 Job Management"])
+    # Create tabs based on session state
+    tabs = st.tabs(["📰 News", "📺 Generate", "🔄 Job Management"])
     
-    # News tab
-    with tab1:
-        # Get article URL
-        article_url = st.text_input(
-            "Enter a news article URL:", 
-            value="https://www.theguardian.com/commentisfree/ng-interactive/2025/mar/28/ai-alphafold-biology-protein-structure",
-            help="Paste a URL to a news article"
-        )
-        
-        if st.button("🔍 Parse Article", use_container_width=True):
-            # Status indicators
-            status_area = st.container()
-            article_status = status_area.empty()
-            script_status = status_area.empty()
-            audio_status = status_area.empty()
-            video_status = status_area.empty()
+    # News tab (only displayed if selected)
+    with tabs[0]:
+        if st.session_state.current_tab == 0:
+            # Get article URL
+            article_url = st.text_input(
+                "Enter a news article URL:", 
+                value="https://www.theguardian.com/commentisfree/ng-interactive/2025/mar/28/ai-alphafold-biology-protein-structure",
+                help="Paste a URL to a news article"
+            )
             
-            # Create a progress bar
-            progress_bar = st.progress(0)
-            
-            # Debug status
-            debug_status = st.empty()
-            
-            if article_url:
-                # Process article
-                article_status.warning("📰 Article: Parsing...")
-                progress_bar.progress(25)
+            # Check if we've already processed this URL
+            if article_url in st.session_state.processed_urls:
+                cached_data = st.session_state.processed_urls[article_url]
+                st.success(f"✅ Using cached data for: {article_url}")
                 
-                content = process_article_url(article_url, news_agent)
+                # Display cached data
+                with st.expander("📄 Cached Script"):
+                    st.write(f"**Title:** {cached_data['title']}")
+                    st.write("**Script:**")
+                    st.write(cached_data['content'])
+                    st.write("**Keywords:** " + ", ".join(cached_data['keywords']))
                 
-                if content:
-                    article_status.success("📰 Article: Parsed ✅")
-                    progress_bar.progress(50)
-                    debug_status.success(f"✅ Article parsed successfully from {article_url}")
+                # Display cached audio
+                with st.expander("🔊 Cached Audio"):
+                    st.audio(cached_data['audio_file'])
+                
+                # Add button to use cached data
+                if st.button("Use Cached Data for Video Generation", use_container_width=True):
+                    st.session_state.generated_audio = cached_data['audio_file']
+                    st.session_state.generated_audio_url = cached_data['audio_url']
+                    # Set tab to Generate and rerun
+                    st.session_state.switch_to_tab = 1  # Switch to Generate tab
+                    st.rerun()  # Use rerun instead of experimental_rerun
                     
-                    # Generate script
-                    script_status.warning("📝 Script: Generating...")
-                    script_result = generate_script(content, content_agent)
+                # Add back button to return to News tab
+                if st.button("⬅️ Back to News"):
+                    st.session_state.switch_to_tab = 0
+                    st.rerun()
+            
+            # Parse Article button
+            if st.button("🔍 Parse Article", use_container_width=True):
+                # Status indicators
+                status_area = st.container()
+                article_status = status_area.empty()
+                script_status = status_area.empty()
+                audio_status = status_area.empty()
+                
+                # Create a progress bar
+                progress_bar = st.progress(0)
+                
+                # Debug status
+                debug_status = st.empty()
+                
+                if article_url:
+                    # Process article
+                    article_status.warning("📰 Article: Parsing...")
+                    progress_bar.progress(25)
                     
-                    if script_result:
-                        script_status.success("📝 Script: Generated ✅")
-                        progress_bar.progress(75)
-                        debug_status.success("✅ Script generated successfully")
+                    content = process_article_url(article_url, news_agent)
+                    
+                    if content:
+                        article_status.success("📰 Article: Parsed ✅")
+                        progress_bar.progress(50)
+                        debug_status.success(f"✅ Article parsed successfully from {article_url}")
                         
-                        # Show script in expandable section
-                        with st.expander("📄 Generated Script"):
-                            st.write(f"**Title:** {script_result.title}")
-                            st.write("**Script:**")
-                            st.write(script_result.content)
-                            st.write("**Keywords:** " + ", ".join(script_result.keywords))
+                        # Generate script
+                        script_status.warning("📝 Script: Generating...")
+                        script_result = generate_script(content, content_agent)
                         
-                        # Generate audio
-                        audio_status.warning("🎵 Audio: Generating...")
-                        audio_result = generate_audio(script_result.content, audio_agent)
-                        
-                        if audio_result:
-                            audio_status.success("🎵 Audio: Generated ✅")
+                        if script_result:
+                            script_status.success("📝 Script: Generated ✅")
+                            progress_bar.progress(75)
+                            debug_status.success("✅ Script generated successfully")
                             
-                            # Save to session state for the Generate tab
-                            st.session_state.generated_audio = audio_result['audio_file']
-                            st.session_state.generated_audio_url = audio_result['audio_url']
+                            # Show script in expandable section
+                            with st.expander("📄 Generated Script"):
+                                st.write(f"**Title:** {script_result.title}")
+                                st.write("**Script:**")
+                                st.write(script_result.content)
+                                st.write("**Keywords:** " + ", ".join(script_result.keywords))
                             
-                            # Show audio player in expandable section
-                            with st.expander("🔊 Generated Audio"):
-                                st.audio(audio_result['audio_file'])
+                            # Generate audio
+                            audio_status.warning("🎵 Audio: Generating...")
+                            audio_result = generate_audio(script_result.content, audio_agent)
+                            
+                            if audio_result:
+                                audio_status.success("🎵 Audio: Generated ✅")
                                 
+                                # Save to session state for the Generate tab
+                                st.session_state.generated_audio = audio_result['audio_file']
+                                st.session_state.generated_audio_url = audio_result['audio_url']
+                                
+                                # Cache the results
+                                st.session_state.processed_urls[article_url] = {
+                                    'title': script_result.title,
+                                    'content': script_result.content,
+                                    'keywords': script_result.keywords,
+                                    'audio_file': audio_result['audio_file'],
+                                    'audio_url': audio_result['audio_url'],
+                                    'timestamp': datetime.now().isoformat()
+                                }
+                                
+                                # Show audio player in expandable section
+                                with st.expander("🔊 Generated Audio"):
+                                    st.audio(audio_result['audio_file'])
+                                
+                                # Auto-switch to Generate tab
+                                st.success("✅ All processing complete! Switching to Video Generation tab...")
+                                # Set flag to switch tabs on next execution - safer than immediate rerun
+                                st.session_state.switch_to_tab = 1  # Generate tab
+                                # Use rerun() (not experimental_rerun)
+                                st.rerun()
+
     # Generate tab                            
-    with tab2:
-        st.subheader("🎬 Video Generation")
-        
-        # Initialize avatar agent if needed
-        if "avatar_agent" not in locals():
-            avatar_agent = AvatarGenerationAgent()
-        
-        # Check if audio file exists in session state
-        audio_file = None
-        audio_url = None
-        
-        if hasattr(st.session_state, 'generated_audio'):
-            audio_file = st.session_state.generated_audio
+    with tabs[1]:
+        if st.session_state.current_tab == 1:  # Only show content if this tab is active
+            st.subheader("🎬 Video Generation")
             
-        if hasattr(st.session_state, 'generated_audio_url'):
-            audio_url = st.session_state.generated_audio_url
-            if audio_url:
-                st.success(f"✅ Using automatically uploaded audio URL: {audio_url}")
-        
-        if not audio_file:
-            # Allow manual audio upload as fallback
-            st.warning("No generated audio found. Please generate a script and audio in the News tab or upload an audio file below.")
+            # Initialize avatar agent if needed
+            if "avatar_agent" not in locals():
+                avatar_agent = AvatarGenerationAgent()
             
-            uploaded_file = st.file_uploader("Upload an audio file (MP3):", type=["mp3"])
-            if uploaded_file:
-                # Save uploaded file to disk
-                audio_dir = "generated_audio"
-                os.makedirs(audio_dir, exist_ok=True)
-                audio_file = os.path.join(audio_dir, "uploaded_audio.mp3")
-                
-                with open(audio_file, "wb") as f:
-                    f.write(uploaded_file.getvalue())
-                
-                st.success(f"Audio file uploaded and saved to {audio_file}")
-        
-        # Avatar selection
-        st.subheader("👤 Avatar Selection")
-        
-        # Get available avatars
-        avatars = avatar_agent.get_available_avatars()
-        
-        if not avatars:
-            st.error("No avatars found! Please check the `avatars` directory.")
-            return
-        
-        # Get avatar info dictionary for each avatar name
-        avatar_info_dict = {}
-        for avatar_name in avatars:
-            avatar_info_dict[avatar_name] = avatar_agent.get_avatar_info(avatar_name)
-        
-        # Display avatars with images if available
-        avatar_cols = st.columns(len(avatars))
-        
-        for i, avatar_name in enumerate(avatars):
-            with avatar_cols[i]:
-                st.write(f"**{avatar_name}**")
-                
-                avatar_info = avatar_info_dict[avatar_name]
-                # Try to display image if available
-                image_path = avatar_info.get("image")
-                if image_path and os.path.exists(image_path):
-                    st.image(image_path, width=150)
-                elif image_path and image_path.startswith("http"):
-                    st.image(image_path, width=150)
-                else:
-                    st.info(f"[No preview image]")
-                
-                st.write(avatar_info.get("description", ""))
-        
-        # Avatar selection dropdown
-        selected_avatar = st.selectbox(
-            "Select Avatar:", 
-            avatars,
-            index=0
-        )
-        
-        if not audio_file:
-            st.warning("⚠️ Please generate or upload an audio file before proceeding.")
-            return
+            # Check if audio file exists in session state
+            audio_file = None
+            audio_url = None
             
-        # Add generation options
-        with st.expander("⚙️ Generation Options", expanded=True):
-            poll_option = st.radio(
-                "Generation Mode:",
-                ["Submit job and continue", "Wait with timeout", "Wait indefinitely"],
-                index=0,  # Default to submit and continue
-                help="Choose whether to wait for the video to complete or submit the job and check later"
+            if hasattr(st.session_state, 'generated_audio'):
+                audio_file = st.session_state.generated_audio
+                
+            if hasattr(st.session_state, 'generated_audio_url'):
+                audio_url = st.session_state.generated_audio_url
+                if audio_url:
+                    st.success(f"✅ Using automatically uploaded audio URL: {audio_url}")
+            
+            if not audio_file:
+                # Allow manual audio upload as fallback
+                st.warning("No generated audio found. Please generate a script and audio in the News tab or upload an audio file below.")
+                
+                uploaded_file = st.file_uploader("Upload an audio file (MP3):", type=["mp3"])
+                if uploaded_file:
+                    # Save uploaded file to disk
+                    audio_dir = "generated_audio"
+                    os.makedirs(audio_dir, exist_ok=True)
+                    audio_file = os.path.join(audio_dir, "uploaded_audio.mp3")
+                    
+                    with open(audio_file, "wb") as f:
+                        f.write(uploaded_file.getvalue())
+                    
+                    st.success(f"Audio file uploaded and saved to {audio_file}")
+                    
+                    # Add back button to return to News tab
+                    if st.button("⬅️ Back to News"):
+                        st.session_state.switch_to_tab = 0
+                        st.rerun()  # Use rerun instead of experimental_rerun
+            
+            # Avatar selection
+            st.subheader("👤 Avatar Selection")
+            
+            # Get available avatars
+            avatars = avatar_agent.get_available_avatars()
+            
+            if not avatars:
+                st.error("No avatars found! Please check the `avatars` directory.")
+                return
+            
+            # Get avatar info dictionary for each avatar name
+            avatar_info_dict = {}
+            for avatar_name in avatars:
+                avatar_info_dict[avatar_name] = avatar_agent.get_avatar_info(avatar_name)
+            
+            # Display avatars with images if available
+            avatar_cols = st.columns(len(avatars))
+            
+            for i, avatar_name in enumerate(avatars):
+                with avatar_cols[i]:
+                    st.write(f"**{avatar_name}**")
+                    
+                    avatar_info = avatar_info_dict[avatar_name]
+                    # Try to display image if available
+                    image_path = avatar_info.get("image")
+                    if image_path and os.path.exists(image_path):
+                        st.image(image_path, width=150)
+                    elif image_path and image_path.startswith("http"):
+                        st.image(image_path, width=150)
+                    else:
+                        st.info(f"[No preview image]")
+                    
+                    st.write(avatar_info.get("description", ""))
+            
+            # Avatar selection dropdown
+            selected_avatar = st.selectbox(
+                "Select Avatar:", 
+                avatars,
+                index=0
             )
             
-            poll_interval = st.slider(
-                "Poll Interval (seconds):",
-                min_value=5,
-                max_value=60,
-                value=15,
-                help="How often to check job status if waiting for completion"
-            )
+            if not audio_file:
+                st.warning("⚠️ Please generate or upload an audio file before proceeding.")
+                # Add back button to return to News tab
+                if st.button("⬅️ Back to News Tab"):
+                    st.session_state.switch_to_tab = 0
+                    st.rerun()  # Use rerun instead of experimental_rerun
+                return
             
-            max_attempts = st.slider(
-                "Maximum Polls:",
-                min_value=5,
-                max_value=120,
-                value=40,
-                help="Maximum number of times to check status (ignored if waiting indefinitely)"
-            )
+            # Add generation options
+            with st.expander("⚙️ Generation Options", expanded=True):
+                poll_option = st.radio(
+                    "Generation Mode:",
+                    ["Submit job and continue", "Wait with timeout", "Wait indefinitely"],
+                    index=0,  # Default to submit and continue
+                    help="Choose whether to wait for the video to complete or submit the job and check later"
+                )
+                
+                poll_interval = st.slider(
+                    "Poll Interval (seconds):",
+                    min_value=5,
+                    max_value=60,
+                    value=15,
+                    help="How often to check job status if waiting for completion"
+                )
+                
+                max_attempts = st.slider(
+                    "Maximum Polls:",
+                    min_value=5,
+                    max_value=120,
+                    value=40,
+                    help="Maximum number of times to check status (ignored if waiting indefinitely)"
+                )
+                
+                estimated_time = max_attempts * poll_interval
+                st.info(f"With these settings, will poll for up to {estimated_time} seconds (~{estimated_time/60:.1f} minutes)")
             
-            estimated_time = max_attempts * poll_interval
-            st.info(f"With these settings, will poll for up to {estimated_time} seconds (~{estimated_time/60:.1f} minutes)")
-        
-        # Process polling options
-        poll_for_completion = poll_option in ["Wait with timeout", "Wait indefinitely"]
-        indefinite_polling = poll_option == "Wait indefinitely"
-        
-        # Add option for providing public audio URL - only if we don't already have one
-        if not audio_url:
-            st.subheader("📝 Audio URL Options")
+            # Process polling options
+            poll_for_completion = poll_option in ["Wait with timeout", "Wait indefinitely"]
+            indefinite_polling = poll_option == "Wait indefinitely"
             
-            # For audio, we need to use a public URL 
-            # Since we don't have direct upload support, we'll use a hosted solution
-            if audio_url:
-                # Don't re-encode the URL here since it's already encoded by the audio generator
-                print(f"🚀 DEBUG: Using provided audio URL: {audio_url}")
-                st.write(f"✅ Using provided audio URL: {audio_url}")
-            else:
+            # Add option for providing public audio URL - only if we don't already have one
+            if not audio_url:
+                st.subheader("📝 Audio URL Options")
+                
+                # For audio, we need to use a public URL 
+                # Since we don't have direct upload support, we'll use a hosted solution
                 st.error("⚠️ Audio file must be hosted on a public URL to work with Sync.so")
                 st.info("""
                 ### Upload Steps:
@@ -437,160 +506,187 @@ def main():
                 
                 The file must be publicly accessible. This is a requirement from Sync.so.
                 """)
-        
-        if not audio_url:
-            st.error("Please provide a URL for your audio file")
-        
-        if st.button("Generate Video with Sync.so", use_container_width=True):
-            video_status = st.empty()
-            progress_bar = st.progress(0)
-            debug_status = st.empty()
             
-            video_status.warning("🎥 Video: Starting generation process...")
-            progress_bar.progress(80)
-            
-            # Create status containers
-            upload_status = st.empty()
-            processing_status = st.empty()
-            completion_status = st.empty()
-            
-            with st.spinner("🎥 Creating lip-synced video..."):
-                # Generate video with options
-                video_result = generate_avatar_video(
-                    audio_file,
-                    selected_avatar,
-                    None,  # API key is handled in the agent
-                    poll_for_completion=poll_for_completion,
-                    poll_interval=poll_interval,
-                    indefinite_polling=indefinite_polling,
-                    max_attempts=max_attempts,
-                    audio_url=audio_url  # Use the audio URL (either from S3 upload or manual input)
-                )
+            if st.button("Generate Video ", use_container_width=True):
+                video_status = st.empty()
+                progress_bar = st.progress(0)
+                debug_status = st.empty()
                 
-                if video_result:
-                    if video_result.status == "COMPLETED" and video_result.video_url:
-                        # Video completed successfully
-                        video_status.success("🎥 Video: Done ✅")
-                        progress_bar.progress(100)
-                        debug_status.success(f"✅ Video generated: {video_result.video_url}")
-                        
-                        # Show completion message
-                        completion_status.success("✨ Video generation completed!")
-                        
-                        # Show video details
-                        with st.expander("🎬 Final Video", expanded=True):
-                            st.write("**Video URL:**")
-                            st.code(video_result.video_url)
-                            st.write("**Preview:**")
-                            st.video(video_result.video_url)
+                video_status.warning("🎥 Video: Starting generation process...")
+                progress_bar.progress(80)
+                
+                # Create status containers
+                upload_status = st.empty()
+                processing_status = st.empty()
+                completion_status = st.empty()
+                
+                with st.spinner("🎥 Creating lip-synced video..."):
+                    # Generate video with options
+                    video_result = generate_avatar_video(
+                        audio_file,
+                        selected_avatar,
+                        None,  # API key is handled in the agent
+                        poll_for_completion=poll_for_completion,
+                        poll_interval=poll_interval,
+                        indefinite_polling=indefinite_polling,
+                        max_attempts=max_attempts,
+                        audio_url=audio_url  # Use the audio URL (either from S3 upload or manual input)
+                    )
+                    
+                    if video_result:
+                        if video_result.status == "COMPLETED" and video_result.video_url:
+                            # Video completed successfully
+                            video_status.success("🎥 Video: Done ✅")
+                            progress_bar.progress(100)
+                            debug_status.success(f"✅ Video generated: {video_result.video_url}")
+                            
+                            # Show completion message
+                            completion_status.success("✨ Video generation completed!")
+                            
+                            # Show video details
+                            with st.expander("🎬 Final Video", expanded=True):
+                                st.write("**Sync.so Video URL:**")
+                                st.code(video_result.video_url)
+                                
+                                if video_result.s3_video_url:
+                                    st.write("**S3 Backup URL:**")
+                                    st.code(video_result.s3_video_url)
+                                    st.success("✅ Video successfully backed up to S3!")
+                                
+                                st.write("**Preview:**")
+                                st.video(video_result.video_url)
+                                
+                                # Add button to switch to Job Management tab
+                                if st.button("View All Jobs"):
+                                    st.session_state.switch_to_tab = 2  # Switch to Job Management tab
+                                    st.rerun()  # Use rerun instead of experimental_rerun
+                        else:
+                            # Job submitted but not completed yet
+                            video_status.info("🎥 Video: Job submitted ⏳")
+                            progress_bar.progress(85)
+                            debug_status.info(f"⏳ Job submitted with ID: {video_result.job_id}")
+                            
+                            # Show job information
+                            completion_status.info(f"""
+                                ### Job Submitted
+                                
+                                Your video generation job has been submitted to Sync.so.
+                                
+                                **Job ID:** `{video_result.job_id}`  
+                                **Status:** {video_result.status}
+                                
+                                You can check the status of your job in the Job Management tab.
+                            """)
+                            
+                            # Add button to switch to Job Management tab
+                            if st.button("Go to Job Management"):
+                                st.session_state.switch_to_tab = 2  # Switch to Job Management tab
+                                st.rerun()  # Use rerun instead of experimental_rerun
                     else:
-                        # Job submitted but not completed yet
-                        video_status.info("🎥 Video: Job submitted ⏳")
-                        progress_bar.progress(85)
-                        debug_status.info(f"⏳ Job submitted with ID: {video_result.job_id}")
-                        
-                        # Show job information
-                        completion_status.info(f"""
-                            ### Job Submitted
-                            
-                            Your video generation job has been submitted to Sync.so.
-                            
-                            **Job ID:** `{video_result.job_id}`  
-                            **Status:** {video_result.status}
-                            
-                            You can check the status of your job in the Job Management tab.
-                        """)
-                else:
-                    video_status.error("🎥 Video: Failed ❌")
-                    progress_bar.progress(0)
-                    debug_status.error("❌ Video generation failed")
-                    completion_status.error("❌ Failed to generate video. Check debug information above.")
+                        video_status.error("🎥 Video: Failed ❌")
+                        progress_bar.progress(0)
+                        debug_status.error("❌ Video generation failed")
+                        completion_status.error("❌ Failed to generate video. Check debug information above.")
 
     # Job management tab
-    with tab3:
-        st.title("🔄 Job Management")
-        st.write("View and manage your Sync.so video generation jobs.")
-        
-        # Initialize avatar agent if needed
-        if "avatar_agent" not in locals():
-            avatar_agent = AvatarGenerationAgent()
-        
-        # Create two sections: Job List and Job Details
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.subheader("Jobs")
-            # Display saved jobs
-            saved_jobs = avatar_agent.list_saved_jobs()
+    with tabs[2]:
+        if st.session_state.current_tab == 2:  # Only show content if this tab is active
+            st.title("🔄 Job Management")
+            st.write("View and manage your Sync.so video generation jobs.")
             
-            if not saved_jobs:
-                st.info("No jobs found. Generate some videos first!")
-            else:
-                # Sort jobs by created_at (newest first)
-                saved_jobs.sort(key=lambda job: job.get('created_at', ''), reverse=True)
-                
-                for job in saved_jobs:
-                    job_id = job.get('id', 'unknown')
-                    status = job.get('status', 'UNKNOWN')
-                    created_at = job.get('created_at', 'unknown')
-                    
-                    # Format created_at as date if possible
-                    try:
-                        created_date = datetime.fromisoformat(created_at).strftime('%Y-%m-%d %H:%M:%S')
-                    except:
-                        created_date = created_at
-                    
-                    # Show job entry with status color
-                    if status == "COMPLETED":
-                        st.success(f"Job: {job_id[:8]}... ({created_date})")
-                    elif status in ["FAILED", "REJECTED", "CANCELED", "TIMED_OUT"]:
-                        st.error(f"Job: {job_id[:8]}... ({created_date})")
-                    else:
-                        st.info(f"Job: {job_id[:8]}... ({created_date})")
-                    
-                    # Button to view job details
-                    if st.button(f"View Job {job_id[:8]}...", key=f"view_{job_id}"):
-                        st.session_state.selected_job_id = job_id
-        
-        with col2:
-            st.subheader("Job Details")
+            # Add button to go back to News tab
+            col1, col2 = st.columns([1, 6])
+            with col1:
+                if st.button("⬅️ Back to News"):
+                    st.session_state.switch_to_tab = 0
+                    st.rerun()  # Use rerun instead of experimental_rerun
             
-            # Check for selected job
-            if "selected_job_id" in st.session_state:
-                job_id = st.session_state.selected_job_id
+            # Initialize avatar agent if needed
+            if "avatar_agent" not in locals():
+                avatar_agent = AvatarGenerationAgent()
+            
+            # Create two sections: Job List and Job Details
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                st.subheader("Jobs")
+                # Display saved jobs
+                saved_jobs = avatar_agent.list_saved_jobs()
                 
-                # Button to refresh job status
-                if st.button("Refresh Status"):
-                    status_data = avatar_agent.check_job_status(job_id)
-                    st.success("Job status refreshed!")
-                    
-                # Display job details
-                job_file = os.path.join(avatar_agent.jobs_dir, f"{job_id}.json")
-                
-                if os.path.exists(job_file):
-                    with open(job_file, "r") as f:
-                        import json
-                        job_info = json.load(f)
-                    
-                    # Display job info
-                    st.write(f"**Job ID:** {job_id}")
-                    st.write(f"**Created:** {job_info.get('created_at', 'unknown')}")
-                    st.write(f"**Last Checked:** {job_info.get('last_checked', 'unknown')}")
-                    st.write(f"**Status:** {job_info.get('status', 'UNKNOWN')}")
-                    
-                    # If job is completed, show the video
-                    if job_info.get('status') == "COMPLETED" and job_info.get('data', {}).get('outputUrl'):
-                        video_url = job_info.get('data', {}).get('outputUrl')
-                        st.write("**Video:**")
-                        st.video(video_url)
-                    
-                    # Show raw data in expander
-                    with st.expander("Raw Job Data"):
-                        st.json(job_info)
+                if not saved_jobs:
+                    st.info("No jobs found. Generate some videos first!")
                 else:
-                    st.warning(f"Job file not found for ID {job_id}")
-            else:
-                st.info("Select a job from the list to view details.")
+                    # Sort jobs by created_at (newest first)
+                    saved_jobs.sort(key=lambda job: job.get('created_at', ''), reverse=True)
+                    
+                    for job in saved_jobs:
+                        job_id = job.get('id', 'unknown')
+                        status = job.get('status', 'UNKNOWN')
+                        created_at = job.get('created_at', 'unknown')
+                        
+                        # Format created_at as date if possible
+                        try:
+                            created_date = datetime.fromisoformat(created_at).strftime('%Y-%m-%d %H:%M:%S')
+                        except:
+                            created_date = created_at
+                        
+                        # Show job entry with status color
+                        if status == "COMPLETED":
+                            st.success(f"Job: {job_id[:8]}... ({created_date})")
+                        elif status in ["FAILED", "REJECTED", "CANCELED", "TIMED_OUT"]:
+                            st.error(f"Job: {job_id[:8]}... ({created_date})")
+                        else:
+                            st.info(f"Job: {job_id[:8]}... ({created_date})")
+                        
+                        # Button to view job details
+                        if st.button(f"View Job {job_id[:8]}...", key=f"view_{job_id}"):
+                            st.session_state.selected_job_id = job_id
+            
+            with col2:
+                st.subheader("Job Details")
+                
+                # Check for selected job
+                if "selected_job_id" in st.session_state:
+                    job_id = st.session_state.selected_job_id
+                    
+                    # Button to refresh job status
+                    if st.button("Refresh Status"):
+                        status_data = avatar_agent.check_job_status(job_id)
+                        st.success("Job status refreshed!")
+                        
+                    # Display job details
+                    job_file = os.path.join(avatar_agent.jobs_dir, f"{job_id}.json")
+                    
+                    if os.path.exists(job_file):
+                        with open(job_file, "r") as f:
+                            import json
+                            job_info = json.load(f)
+                        
+                        # Display job info
+                        st.write(f"**Job ID:** {job_id}")
+                        st.write(f"**Created:** {job_info.get('created_at', 'unknown')}")
+                        st.write(f"**Last Checked:** {job_info.get('last_checked', 'unknown')}")
+                        st.write(f"**Status:** {job_info.get('status', 'UNKNOWN')}")
+                        
+                        # If job is completed, show the video
+                        if job_info.get('status') == "COMPLETED" and job_info.get('data', {}).get('outputUrl'):
+                            video_url = job_info.get('data', {}).get('outputUrl')
+                            st.write("**Video:**")
+                            st.video(video_url)
+                        
+                        # Show S3 URL if available
+                        if job_info.get('s3_video_url'):
+                            st.write("**S3 Backup URL:**")
+                            st.code(job_info.get('s3_video_url'))
+                            st.success("✅ Video backed up to S3")
+                        
+                        # Show raw data in expander
+                        with st.expander("Raw Job Data"):
+                            st.json(job_info)
+                    else:
+                        st.warning(f"Job file not found for ID {job_id}")
+                else:
+                    st.info("Select a job from the list to view details.")
 
 if __name__ == "__main__":
     main() 
