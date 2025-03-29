@@ -1,0 +1,21 @@
+[build]
+  publish = "netlify/public"
+  command = "echo 'No build required'"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-streamlit-app-url.streamlit.app/api/:splat"
+  status = 200
+  force = true
+
+# Redirect to your main Streamlit app
+[[redirects]]
+  from = "/app"
+  to = "https://share.streamlit.io/yourusername/agentic-content-transformer/main"
+  status = 302
+
+# Redirect to your GitHub repository
+[[redirects]]
+  from = "/github"
+  to = "https://github.com/VectorVerse-Evolve-Inc/Agentic-Content-Transformer"
+  status = 302 
