@@ -1,0 +1,39 @@
+name: agentic-content-transformer
+region: nyc
+services:
+- name: web
+  image:
+    registry_type: DOCKER_HUB
+    registry: gsinghdev
+    repository: agentic-content-transformer
+    tag: latest
+  instance_size: basic-xs
+  instance_count: 1
+  http_port: 8501
+  routes:
+  - path: /
+  health_check:
+    http_path: /
+    initial_delay_seconds: 30
+  envs:
+  - key: ELEVENLABS_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: SYNC_SO_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: AWS_ACCESS_KEY_ID
+    scope: RUN_TIME
+    type: SECRET
+  - key: AWS_SECRET_ACCESS_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: OPENAI_API_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: AWS_S3_BUCKET
+    scope: RUN_TIME
+    value: vectorverseevolve
+  - key: AWS_S3_REGION
+    scope: RUN_TIME
+    value: us-west-2 
