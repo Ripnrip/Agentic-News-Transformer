@@ -1,0 +1,37 @@
+name: agentic-content-transformer
+region: nyc
+services:
+- name: streamlit-app
+  github:
+    repo: VectorVerse-Evolve-Inc/Agentic-Content-Transformer
+    branch: main
+    deploy_on_push: true
+  build_command: pip install -r requirements.txt
+  run_command: streamlit run news_to_avatar.py --server.port=$PORT --server.address=0.0.0.0
+  http_port: 8501
+  instance_size: basic-s # 1GB RAM, 1vCPU
+  instance_count: 1 # Number of instances
+  routes:
+  - path: /
+  envs:
+  - key: ELEVENLABS_API_KEY
+    scope: RUN_TIME
+    value: ${ELEVENLABS_API_KEY}
+  - key: SYNC_SO_API_KEY
+    scope: RUN_TIME
+    value: ${SYNC_SO_API_KEY}
+  - key: AWS_ACCESS_KEY_ID
+    scope: RUN_TIME
+    value: ${AWS_ACCESS_KEY_ID}
+  - key: AWS_SECRET_ACCESS_KEY
+    scope: RUN_TIME
+    value: ${AWS_SECRET_ACCESS_KEY}
+  - key: OPENAI_API_KEY
+    scope: RUN_TIME
+    value: ${OPENAI_API_KEY}
+  - key: AWS_S3_BUCKET
+    scope: RUN_TIME
+    value: "vectorverseevolve"
+  - key: AWS_S3_REGION
+    scope: RUN_TIME
+    value: "us-west-2" 
