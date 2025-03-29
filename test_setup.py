@@ -4,6 +4,7 @@ Test script to verify the project setup.
 
 import os
 from dotenv import load_dotenv
+from env_validator import validate_conda_env
 
 def test_environment():
     """Test that the environment is set up correctly."""
@@ -44,9 +45,15 @@ def test_imports():
     except ImportError as e:
         print(f"❌ Import error: {str(e)}")
 
-if __name__ == "__main__":
+def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     print("=== Testing Agentic Content Transformer Setup ===\n")
     test_environment()
     print()
     test_imports()
-    print("\n=== Setup Test Complete ===") 
+    print("\n=== Setup Test Complete ===")
+
+if __name__ == "__main__":
+    main() 

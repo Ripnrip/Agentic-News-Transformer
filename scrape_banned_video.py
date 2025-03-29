@@ -7,6 +7,7 @@ import random
 import json
 import os
 import subprocess
+from env_validator import validate_conda_env
 
 def get_random_user_agent():
     user_agents = [
@@ -234,7 +235,10 @@ def save_links_to_file(links, filename="video_links.json"):
     except Exception as e:
         print(f"Error saving links to file: {str(e)}")
 
-if __name__ == "__main__":
+def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     website_url = "https://banned.video/channel/most-banned-videos"
     
     print("Starting video link extraction...")
@@ -252,3 +256,6 @@ if __name__ == "__main__":
         
     except Exception as e:
         print(f"Script failed: {str(e)}")
+
+if __name__ == "__main__":
+    main()

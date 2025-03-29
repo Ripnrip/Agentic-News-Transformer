@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import cohere
 import chromadb
 from agents import NewsArticle, NewsSearchAgent
+from env_validator import validate_conda_env
 
 # Load environment variables from .env file
 load_dotenv()
@@ -212,8 +213,14 @@ class NewsVectorStore:
         print("*******" + str(similar_articles))
         return similar_articles
 
-if __name__ == "__main__":
+def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     # Initialize and store news articles
     vector_store = NewsVectorStore(cohere_api_key=os.getenv("COHERE_API_KEY"))
     vector_store.store_news()
     vector_store.get_collection_info()
+
+if __name__ == "__main__":
+    main()

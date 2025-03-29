@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import os
 from audio_generator import generate_audio_content
+from env_validator import validate_conda_env
 
 def test_content_generation():
     """Test the content generation pipeline."""
@@ -77,6 +78,12 @@ def test_audio_from_existing():
         print(f"Script file: {audio_content['script_file']}")
         print(f"SRT file: {audio_content['srt_file']}")
         print(f"Estimated duration: {audio_content['duration']:.1f} seconds")
+
+def main():
+    # Validate conda environment
+    validate_conda_env()
+    
+    # Rest of the code...
 
 if __name__ == "__main__":
     test_content_generation()  # Uncomment to run content generation

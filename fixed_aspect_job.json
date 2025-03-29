@@ -1,0 +1,30 @@
+{
+  "id": "7b50995e-df61-4940-ba49-dcf7615b5301",
+  "createdAt": "2025-03-29T07:44:16.354Z",
+  "status": "COMPLETED",
+  "model": "sync-1.9.0-beta",
+  "input": [
+    {
+      "url": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/hoe_3_30.mp4",
+      "type": "video"
+    },
+    {
+      "url": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/News_Script_20250329_033235.mp3",
+      "type": "audio"
+    }
+  ],
+  "webhookUrl": null,
+  "options": {
+    "fps": 25,
+    "sync_mode": "bounce",
+    "output_format": "mp4",
+    "active_speaker": true,
+    "output_resolution": [
+      480,
+      854
+    ]
+  },
+  "outputUrl": "https://api.sync.so/v2/generations/7b50995e-df61-4940-ba49-dcf7615b5301/result?token=bbb5ed1e-86f7-4d7b-b2a4-5f9e0aae686d",
+  "outputDuration": 35.24,
+  "error": null
+}

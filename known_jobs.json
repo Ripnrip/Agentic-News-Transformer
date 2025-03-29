@@ -1,0 +1,23 @@
+{
+    "d0776b3c-62d8-4cd7-a804-cbe1cdba1d43": {
+        "id": "d0776b3c-62d8-4cd7-a804-cbe1cdba1d43",
+        "status": "COMPLETED",
+        "video_url": "https://api.sync.so/v2/generations/d0776b3c-62d8-4cd7-a804-cbe1cdba1d43/result?token=e0715e7e-1df6-4beb-b548-6cb370c3e3de",
+        "created_at": "2025-03-29T07:36:42.080Z",
+        "outputDuration": 35.24,
+        "audio_url": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/News_Script_20250329_033235.mp3",
+        "video_source": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/hoe_3_30.mp4",
+        "notes": "Initial test - aspect ratio is incorrect (stretched)"
+    },
+    "7b50995e-df61-4940-ba49-dcf7615b5301": {
+        "id": "7b50995e-df61-4940-ba49-dcf7615b5301",
+        "status": "COMPLETED",
+        "video_url": "https://api.sync.so/v2/generations/7b50995e-df61-4940-ba49-dcf7615b5301/result?token=bbb5ed1e-86f7-4d7b-b2a4-5f9e0aae686d",
+        "created_at": "2025-03-29T07:44:16.354Z",
+        "outputDuration": 35.24,
+        "audio_url": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/News_Script_20250329_033235.mp3",
+        "video_source": "https://vectorverseevolve.s3.us-west-2.amazonaws.com/hoe_3_30.mp4",
+        "resolution": [480, 854],
+        "notes": "Fixed aspect ratio (9:16) for portrait video"
+    }
+} 

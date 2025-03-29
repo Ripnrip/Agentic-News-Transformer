@@ -22,6 +22,7 @@ from requests.exceptions import RequestException
 
 # Local imports
 from models import NewsArticle, ArticleContent
+from env_validator import validate_conda_env
 
 
 # Define the NewsCollector class
@@ -636,7 +637,10 @@ class NewsSearchAgent:
     
     # Run
 
-if __name__ == "__main__":
+def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     print("Fetching AI news articles from Google News...")
     google_ai_news = NewsSearchAgent().fetch_ai_news_from_google()
     

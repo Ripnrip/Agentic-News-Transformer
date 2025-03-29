@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import argparse
 from database_agent import DatabaseAgent
+from env_validator import validate_conda_env
 
 def log_article_details(articles, parsed_content):
     """Log detailed information about articles and their parsed content."""
@@ -33,6 +34,9 @@ def log_article_details(articles, parsed_content):
         print("-------------------\n")
 
 def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Fetch and parse AI news articles')
     parser.add_argument('--limit', type=int, default=5,

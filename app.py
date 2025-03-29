@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import json
 from social_media_agent import SocialMediaAgent
 from avatar_generator import AvatarGenerationAgent
+from env_validator import validate_conda_env
 
 # Initialize agents
 db_agent = DatabaseAgent()
@@ -30,6 +31,9 @@ VOICES = {
 }
 
 def main():
+    # Validate conda environment
+    validate_conda_env()
+    
     st.title("AI News Content Generator")
     
     # Sidebar for configuration
