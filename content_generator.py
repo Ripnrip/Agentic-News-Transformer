@@ -49,10 +49,11 @@ class ArticleResult(BaseModel):
 class ContentGenerationAgent:
     """Agent for generating content."""
     
-    def __init__(self):
+    def __init__(self, db_agent):
         """Initialize the content generation agent."""
         # Initialize OpenAI client
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.db_agent = db_agent # Store the database agent
         
         # Create the agent
         self.agent = Agent(
