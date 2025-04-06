@@ -220,3 +220,10 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Project specific
+*.db
+*.sqlite3
+
+# Large files
+Miniconda3-latest-MacOSX-arm64.sh
