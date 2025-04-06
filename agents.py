@@ -221,7 +221,7 @@ class NewsSearchAgent:
             }
 
         browser_config = BrowserConfig(
-            headless=False,  # Set to False for full browser
+            headless=True,  # Set to True for container environments
             verbose=True,
             # Remove unsupported direct arguments
         )
@@ -246,7 +246,8 @@ class NewsSearchAgent:
                     '--window-position=0,0',
                     '--ignore-certifcate-errors',
                     '--ignore-certifcate-errors-spki-list',
-                    '--disable-dev-shm-usage'
+                    '--disable-dev-shm-usage',
+                    '--headless=new'  # Add headless mode for container environments
                 ]
             },
             "selectors": {

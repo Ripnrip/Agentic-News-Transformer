@@ -30,4 +30,7 @@ services:
     value: ${ELEVENLABS_API_KEY}
   - key: SYNC_SO_API_KEY
     scope: RUN_AND_BUILD_TIME
-    value: ${SYNC_SO_API_KEY} 
+    value: ${SYNC_SO_API_KEY}
+  - key: DISPLAY
+    scope: RUN_AND_BUILD_TIME
+    value: ":99" 
