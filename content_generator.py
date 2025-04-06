@@ -276,7 +276,7 @@ class ContentGenerationAgent:
         
         # Generate content with OpenAI directly
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.7

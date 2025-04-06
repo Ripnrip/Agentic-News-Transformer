@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from database_agent import DatabaseAgent
 from content_generator import ContentGenerationAgent
-from audio_generator import AudioGenerationAgent
+from audio_generator import AudioGenerationAgent, AudioRequest
 from models import NewsArticle, ArticleContent
 from datetime import datetime, timedelta
 import json
@@ -159,7 +159,8 @@ def main():
                 st.success(f"Stored {len(articles)} articles")
                 
                 # Generate content
-                article = content_agent.generate_article("AI Technology News")
+                topic = articles[0].title if articles else "AI Technology News"
+                article = content_agent.generate_article(topic)
                 
                 # Display generated content
                 st.header("Generated Content")
@@ -171,7 +172,17 @@ def main():
                 # Generate audio with selected voice
                 with st.spinner("Generating audio..."):
                     audio_agent.voice_id = VOICES[selected_voice]
-                    audio_content = audio_agent.generate_audio_content(article, content_agent.client)
+                    
+                    # Create an AudioRequest object with the article content
+                    audio_request = AudioRequest(
+                        text=f"{article['headline']}. {article['intro']} {article['body']} {article['conclusion']}",
+                        title=article['headline'],
+                        voice_id=VOICES[selected_voice],
+                        output_dir="generated_audio",
+                        upload_to_s3=True
+                    )
+                    
+                    audio_content = audio_agent.generate_audio_content(audio_request)
                     
                     # Display audio and transcripts
                     st.header("Audio Content")
