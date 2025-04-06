@@ -30,6 +30,21 @@ VOICES = {
     "Sam": "yoZ06aMxZJJ28mfd3POQ",
 }
 
+def process_raw_text(title: str, text: str, source: str = "manual_input") -> NewsArticle:
+    """Process raw text input into a NewsArticle object."""
+    return NewsArticle(
+        title=title,
+        link=f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        content=ArticleContent(
+            text=text,
+            html="",  # Raw text input won't have HTML
+            markdown=""  # Raw text input won't have markdown
+        ),
+        source=source,
+        source_type="manual",
+        published_date=datetime.now()
+    )
+
 def main():
     # Validate conda environment
     validate_conda_env()
@@ -63,218 +78,175 @@ def main():
             )
     
     # Main content area
-    st.header("Enter News Sources")
+    st.header("Enter News Content")
     
-    # URL input
-    urls = st.text_area(
-        "Enter URLs (one per line)",
-        height=150,
-        help="Enter the URLs of news articles you want to process"
-    )
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["URL Input", "Raw Text Input"])
     
-    if st.button("Generate Content"):
-        if urls:
-            url_list = [url.strip() for url in urls.split('\n') if url.strip()]
-            
-            with st.spinner("Processing articles..."):
-                # Create articles from URLs
-                articles = []
-                for url in url_list:
-                    st.write(f"Processing: {url}")
-                    try:
-                        # Use NewsSearchAgent to parse article
-                        parsed = db_agent._parse_article(url)
-                        if parsed and parsed.get('text'):
-                            article = NewsArticle(
-                                title=parsed.get('title', 'Untitled'),
-                                link=url,
-                                content=ArticleContent(
-                                    text=parsed['text'],
-                                    html=parsed.get('html', ''),
-                                    markdown=parsed.get('markdown', '')
-                                ),
-                                source="user_input",
-                                source_type="newsapi",
-                                published_date=datetime.now()
-                            )
-                            articles.append(article)
-                            st.success(f"Successfully processed: {url}")
-                        else:
-                            st.error(f"Could not extract content from: {url}")
-                    except Exception as e:
-                        st.error(f"Error processing {url}: {str(e)}")
+    articles = []
+    
+    with tab1:
+        # URL input
+        urls = st.text_area(
+            "Enter URLs (one per line)",
+            height=150,
+            help="Enter the URLs of news articles you want to process"
+        )
+        
+        if st.button("Process URLs"):
+            if urls:
+                url_list = [url.strip() for url in urls.split('\n') if url.strip()]
                 
-                if articles:
-                    # Store articles
-                    db_agent.store_articles(articles)
-                    st.success(f"Stored {len(articles)} articles")
-                    
-                    # Generate content
-                    article = content_agent.generate_article("AI Technology News")
-                    
-                    # Display generated content
-                    st.header("Generated Content")
-                    st.subheader(article['headline'])
-                    st.write(article['intro'])
-                    st.write(article['body'])
-                    st.write(article['conclusion'])
-                    
-                    # Generate audio with selected voice
-                    with st.spinner("Generating audio..."):
-                        audio_agent.voice_id = VOICES[selected_voice]
-                        audio_content = audio_agent.generate_audio_content(article, content_agent.client)
-                        
-                        # Display audio and transcripts
-                        st.header("Audio Content")
-                        st.audio(audio_content['audio_file'])
-                        
-                        with st.expander("View Script"):
-                            st.text(audio_content['script'])
-                            
-                        with st.expander("View Subtitles"):
-                            st.text(open(audio_content['srt_file']).read())
-                        
-                        # Save results
-                        results = {
-                            "article": article,
-                            "audio": {
-                                "file": audio_content['audio_file'],
-                                "script": audio_content['script_file'],
-                                "srt": audio_content['srt_file'],
-                                "voice": selected_voice
-                            },
-                            "metadata": {
-                                "generated_date": datetime.now().isoformat(),
-                                "source_urls": url_list
-                            }
-                        }
-                        
-                        # Save to file
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        output_file = f"generated_content/content_{timestamp}.json"
-                        os.makedirs("generated_content", exist_ok=True)
-                        with open(output_file, 'w') as f:
-                            json.dump(results, f, indent=2)
-                            
-                        st.download_button(
-                            "Download Results",
-                            json.dumps(results, indent=2),
-                            file_name=f"content_{timestamp}.json",
-                            mime="application/json"
-                        )
+                with st.spinner("Processing articles..."):
+                    # Create articles from URLs
+                    for url in url_list:
+                        st.write(f"Processing: {url}")
+                        try:
+                            # Use NewsSearchAgent to parse article
+                            parsed = db_agent._parse_article(url)
+                            if parsed and parsed.get('text'):
+                                article = NewsArticle(
+                                    title=parsed.get('title', 'Untitled'),
+                                    link=url,
+                                    content=ArticleContent(
+                                        text=parsed['text'],
+                                        html=parsed.get('html', ''),
+                                        markdown=parsed.get('markdown', '')
+                                    ),
+                                    source="user_input",
+                                    source_type="newsapi",
+                                    published_date=datetime.now()
+                                )
+                                articles.append(article)
+                                st.success(f"Successfully processed: {url}")
+                            else:
+                                st.error(f"Could not extract content from: {url}")
+                        except Exception as e:
+                            st.error(f"Error processing {url}: {str(e)}")
+    
+    with tab2:
+        # Raw text input
+        article_title = st.text_input(
+            "Article Title",
+            help="Enter a title for your article"
+        )
+        article_text = st.text_area(
+            "Article Text",
+            height=300,
+            help="Enter the raw text of your article"
+        )
+        article_source = st.text_input(
+            "Source (optional)",
+            value="Manual Input",
+            help="Enter the source of this content"
+        )
+        
+        if st.button("Process Text"):
+            if article_title and article_text:
+                with st.spinner("Processing text..."):
+                    article = process_raw_text(article_title, article_text, article_source)
+                    articles.append(article)
+                    st.success("Successfully processed text input")
+            else:
+                st.error("Please provide both a title and text content")
 
-            # After generating audio content
-            if 'audio_content' in locals():
-                # Add social media distribution section
-                st.header("Social Media Distribution")
+    # Continue with content generation if we have articles
+    if articles:
+        if st.button("Generate Content", key="generate_content"):
+            with st.spinner("Generating content..."):
+                # Store articles
+                db_agent.store_articles(articles)
+                st.success(f"Stored {len(articles)} articles")
                 
-                # Platform selection
-                platforms = st.multiselect(
-                    "Select platforms to publish to",
-                    options=list(social_agent.platforms.keys()),
-                    default=[]
-                )
+                # Generate content
+                article = content_agent.generate_article("AI Technology News")
                 
-                # Custom personalities
-                st.subheader("Platform Personalities")
-                custom_personalities = {}
+                # Display generated content
+                st.header("Generated Content")
+                st.subheader(article['headline'])
+                st.write(article['intro'])
+                st.write(article['body'])
+                st.write(article['conclusion'])
                 
-                for platform in platforms:
-                    default_personality = social_agent.platform_personalities.get(platform, "default")
+                # Generate audio with selected voice
+                with st.spinner("Generating audio..."):
+                    audio_agent.voice_id = VOICES[selected_voice]
+                    audio_content = audio_agent.generate_audio_content(article, content_agent.client)
                     
-                    if platform == "x":
-                        options = ["casual", "professional", "enthusiastic"]
-                    elif platform == "facebook":
-                        options = ["casual", "storyteller", "professional"]
-                    elif platform == "linkedin":
-                        options = ["thought_leader", "industry_expert", "educator"]
-                    else:
-                        options = ["default", "casual", "professional"]
+                    # Display audio and transcripts
+                    st.header("Audio Content")
+                    st.audio(audio_content['audio_file'])
                     
-                    selected = st.selectbox(
-                        f"Personality for {platform}",
-                        options=options,
-                        index=options.index(default_personality) if default_personality in options else 0
+                    with st.expander("View Script"):
+                        st.text(audio_content['script'])
+                        
+                    with st.expander("View Subtitles"):
+                        st.text(open(audio_content['srt_file']).read())
+                    
+                    # Save results
+                    results = {
+                        "article": article,
+                        "audio": {
+                            "file": audio_content['audio_file'],
+                            "script": audio_content['script_file'],
+                            "srt": audio_content['srt_file'],
+                            "voice": selected_voice
+                        },
+                        "metadata": {
+                            "generated_date": datetime.now().isoformat(),
+                            "source_urls": [a.link for a in articles]
+                        }
+                    }
+                    
+                    # Save to file
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_file = f"generated_content/content_{timestamp}.json"
+                    os.makedirs("generated_content", exist_ok=True)
+                    with open(output_file, 'w') as f:
+                        json.dump(results, f, indent=2)
+                        
+                    st.download_button(
+                        "Download Results",
+                        json.dumps(results, indent=2),
+                        file_name=f"content_{timestamp}.json",
+                        mime="application/json"
+                    )
+
+                # After generating audio content
+                if 'audio_content' in locals():
+                    # Add social media distribution section
+                    st.header("Social Media Distribution")
+                    
+                    # Platform selection
+                    platforms = st.multiselect(
+                        "Select platforms to publish to",
+                        options=list(social_agent.platforms.keys()),
+                        default=[]
                     )
                     
-                    custom_personalities[platform] = selected
-                
-                # Schedule posting
-                schedule = st.checkbox("Schedule for later")
-                post_time = None
-                
-                if schedule:
-                    post_time = st.date_input("Post date") 
-                    post_hour = st.slider("Hour", 0, 23, 9)
-                    post_minute = st.slider("Minute", 0, 59, 0, step=5)
-                    post_time = datetime.combine(post_time, datetime.min.time()) + timedelta(hours=post_hour, minutes=post_minute)
+                    # Custom personalities
+                    st.subheader("Platform Personalities")
+                    custom_personalities = {}
                     
-                    st.write(f"Scheduled for: {post_time.strftime('%Y-%m-%d %H:%M')}")
-                
-                # Post button
-                if st.button("Post to Social Media"):
-                    with st.spinner("Posting to social media..."):
-                        # Prepare media files
-                        media_files = {
-                            platform: [audio_content["audio_file"]] for platform in platforms
-                        }
+                    for platform in platforms:
+                        default_personality = social_agent.platform_personalities.get(platform, "default")
                         
-                        # Post or schedule
-                        if schedule and post_time:
-                            results = social_agent.schedule_post(
-                                content=article,
-                                media_files=media_files,
-                                platforms=platforms,
-                                custom_personalities=custom_personalities,
-                                post_time=post_time
-                            )
-                            
-                            if results.get("scheduled"):
-                                st.success(f"Scheduled posts for {post_time.strftime('%Y-%m-%d %H:%M')}")
-                            else:
-                                st.error("Failed to schedule posts")
+                        if platform == "x":
+                            options = ["casual", "professional", "enthusiastic"]
+                        elif platform == "facebook":
+                            options = ["casual", "storyteller", "professional"]
+                        elif platform == "linkedin":
+                            options = ["thought_leader", "industry_expert", "educator"]
                         else:
-                            results = social_agent.post_to_platforms(
-                                content=article,
-                                media_files=media_files,
-                                platforms=platforms,
-                                custom_personalities=custom_personalities
-                            )
-                            
-                            # Display results
-                            for platform, result in results.items():
-                                if result.get("success"):
-                                    st.success(f"Posted to {platform}! Post ID: {result.get('post_id')}")
-                                else:
-                                    st.error(f"Failed to post to {platform}: {result.get('error')}")
-
-                # Generate avatar video if requested
-                if use_avatar and 'audio_content' in locals() and avatar_available:
-                    with st.spinner("Generating avatar video..."):
-                        try:
-                            video_file = avatar_agent.generate_video(
-                                audio_file=audio_content['audio_file'],
-                                resolution=resolution,
-                                enhance_face=enhancement
-                            )
-                            
-                            # Display the video
-                            st.header("Avatar Video")
-                            st.video(video_file)
-                            
-                            # Include video in results
-                            results["video"] = {
-                                "file": video_file,
-                            }
-                            
-                            # Add video to social media files
-                            media_files = {
-                                platform: [video_file] for platform in platforms
-                            }
-                        except Exception as e:
-                            st.error(f"Error generating avatar video: {str(e)}")
-        else:
-            st.error("Please enter at least one URL")
+                            options = ["default", "casual", "professional"]
+                        
+                        selected = st.selectbox(
+                            f"Personality for {platform}",
+                            options=options,
+                            index=options.index(default_personality) if default_personality in options else 0
+                        )
+                        
+                        custom_personalities[platform] = selected
 
 if __name__ == "__main__":
     main() 

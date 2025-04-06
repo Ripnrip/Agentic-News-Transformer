@@ -49,6 +49,23 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# Upgrade pip and install basic requirements
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install pydantic and its dependencies first
+RUN pip install --no-cache-dir \
+    pydantic==2.11.2 \
+    pydantic-core==2.33.1 \
+    typing-extensions>=4.6.1 \
+    annotated-types>=0.4.0
+
+# Install pydantic-ai and related packages
+RUN pip install --no-cache-dir \
+    pydantic-ai==0.0.52 \
+    pydantic-ai-slim==0.0.52 \
+    pydantic-evals==0.0.52 \
+    pydantic-graph==0.0.52
+
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
