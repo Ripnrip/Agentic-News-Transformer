@@ -2,6 +2,7 @@
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import sqlite3 
 import hashlib
 import json
 import os
@@ -17,6 +18,17 @@ import asyncio
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 load_dotenv()
+
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
+
+class DatabaseAgent:
+    ...
 
 # Define model types
 class ArticleContent(BaseModel):
@@ -311,7 +323,7 @@ class DatabaseAgent:
             news_agent = NewsSearchAgent()
             
             # Parse the article using the NewsSearchAgent
-            parsed_content = asyncio.run(news_agent.parse_article(url))
+            parsed_content = _run_async(news_agent.parse_article(url))
             
             if parsed_content and isinstance(parsed_content, dict):
                 # Create an ArticleContent object from the parsed content
