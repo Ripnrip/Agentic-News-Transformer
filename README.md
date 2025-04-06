@@ -26,7 +26,9 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
   - NewsDataHub (for news search)
   - Cohere (for vector storage)
 
-## Quick Start
+## Installation
+
+### Using pip
 
 1. Clone the repository
    ```bash
@@ -34,19 +36,49 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
    cd agentic-content-transformer
    ```
 
-2. Set up environment variables
+2. Create a virtual environment (optional but recommended)
    ```bash
-   cp deployment/.env.example .env
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies
+   ```bash
+   # For production with all dependencies
+   pip install -r requirements.txt
+   
+   # For development with only direct dependencies
+   pip install -r requirements-dev.txt
+   ```
+
+### Using conda
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/yourusername/agentic-content-transformer.git
+   cd agentic-content-transformer
+   ```
+
+2. Create and activate conda environment
+   ```bash
+   conda env create -f environment.yml
+   conda activate news-scraper
+   ```
+
+## Quick Start
+
+1. Set up environment variables
+   ```bash
+   cp .env.example .env
    # Edit .env with your API keys
    ```
 
-3. Run with Docker Compose
+2. Run the application
    ```bash
-   cd deployment
-   docker-compose up
+   streamlit run app.py
    ```
 
-4. Access the application at http://localhost:8501
+3. Access the application at http://localhost:8501
 
 ## Deployment Options
 

@@ -1,0 +1,29 @@
+# Core dependencies
+streamlit
+openai
+pydantic
+pydantic-ai
+elevenlabs
+boto3
+requests
+python-dotenv
+
+# Database and vector store
+chromadb
+langchain
+langchain-community
+langchain-core
+
+# Social media
+tweepy
+facebook-sdk
+linkedin-api
+
+# Web scraping
+beautifulsoup4
+selenium
+playwright
+
+# Utilities
+tqdm
+python-dateutil 

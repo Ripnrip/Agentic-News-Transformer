@@ -1,0 +1,28 @@
+name: news-scraper
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - streamlit
+    - openai
+    - pydantic
+    - pydantic-ai
+    - elevenlabs
+    - boto3
+    - requests
+    - python-dotenv
+    - chromadb
+    - langchain
+    - langchain-community
+    - langchain-core
+    - tweepy
+    - facebook-sdk
+    - linkedin-api
+    - beautifulsoup4
+    - selenium
+    - playwright
+    - tqdm
+    - python-dateutil 
