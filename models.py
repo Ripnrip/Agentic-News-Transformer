@@ -15,7 +15,7 @@ class NewsArticle(BaseModel):
     link: str
     content: Union[str, ArticleContent] = Field(default='', description="Article content in plain text or structured format")
     source: Optional[str] = None
-    source_type: Literal["newsapi", "google", "linkedin", "newsdatahub"] = Field(..., description="Platform source of the article")
+    source_type: Literal["newsapi", "google", "linkedin", "newsdatahub", "manual"] = Field(..., description="Platform source of the article")
     published_date: Optional[datetime] = None
     engagement: Optional[Dict[str, int]] = Field(default=None, description="Engagement metrics like views, likes")
     author: Optional[str] = None
