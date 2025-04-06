@@ -1,11 +1,12 @@
 name: newsscraper
 services:
 - name: web
-  github:
-    branch: main
-    deploy_on_push: true
-    repo: VectorVerse-Evolve-Inc/NewsScraper
-  dockerfile_path: Dockerfile
+  environment_slug: python
+  buildpacks:
+    - name: python
+  source_dir: .
+  build_command: pip install -r requirements.txt
+  run_command: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
   http_port: 8501
   instance_count: 1
   instance_size_slug: basic-xxs
