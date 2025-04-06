@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and Playwright requirements
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -29,11 +29,33 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    # Additional Playwright dependencies
+    libglib2.0-0 \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright and browsers
+RUN playwright install --with-deps chromium
+RUN playwright install-deps
 
 # Copy the rest of the application
 COPY . .
@@ -43,13 +65,17 @@ RUN useradd -m -u 1000 appuser
 RUN chown -R appuser:appuser /app
 USER appuser
 
+# Set up virtual display for Playwright
+ENV DISPLAY=:99
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
+
 # Expose the Streamlit port
 EXPOSE 8501
 
-# Set environment variables
+# Set Python environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV DISPLAY=:99
 
-# Run the application
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"] 
+# Start Xvfb and run the application
+CMD Xvfb :99 -screen 0 1024x768x16 & streamlit run app.py --server.port=8501 --server.address=0.0.0.0 
