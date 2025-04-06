@@ -54,7 +54,7 @@ class StoreResult(BaseModel):
 
 # Create the agent
 db_agent = Agent(
-    "openai:gpt-4o",
+    "openai:gpt-4",
     deps_type=Any,
     result_type=Any,
     system_prompt="Manage database operations for storing and retrieving news articles."

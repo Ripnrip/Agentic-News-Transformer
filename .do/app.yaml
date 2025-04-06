@@ -1,37 +1,32 @@
-name: agentic-content-transformer
-region: nyc
+name: newsscraper
 services:
-- name: streamlit-app
+- name: web
   github:
-    repo: VectorVerse-Evolve-Inc/Agentic-Content-Transformer
     branch: main
     deploy_on_push: true
-  build_command: pip install -r requirements.txt
-  run_command: streamlit run news_to_avatar.py --server.port=$PORT --server.address=0.0.0.0
+    repo: VectorVerse-Evolve-Inc/NewsScraper
+  dockerfile_path: Dockerfile
   http_port: 8501
-  instance_size: basic-s # 1GB RAM, 1vCPU
-  instance_count: 1 # Number of instances
+  instance_count: 1
+  instance_size_slug: basic-xxs
   routes:
   - path: /
   envs:
+  - key: COHERE_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    value: ${COHERE_API_KEY}
+  - key: NEWS_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    value: ${NEWS_API_KEY}
+  - key: NEWS_DATA_HUB_KEY
+    scope: RUN_AND_BUILD_TIME
+    value: ${NEWS_DATA_HUB_KEY}
+  - key: OPENAI_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    value: ${OPENAI_API_KEY}
   - key: ELEVENLABS_API_KEY
-    scope: RUN_TIME
+    scope: RUN_AND_BUILD_TIME
     value: ${ELEVENLABS_API_KEY}
   - key: SYNC_SO_API_KEY
-    scope: RUN_TIME
-    value: ${SYNC_SO_API_KEY}
-  - key: AWS_ACCESS_KEY_ID
-    scope: RUN_TIME
-    value: ${AWS_ACCESS_KEY_ID}
-  - key: AWS_SECRET_ACCESS_KEY
-    scope: RUN_TIME
-    value: ${AWS_SECRET_ACCESS_KEY}
-  - key: OPENAI_API_KEY
-    scope: RUN_TIME
-    value: ${OPENAI_API_KEY}
-  - key: AWS_S3_BUCKET
-    scope: RUN_TIME
-    value: "vectorverseevolve"
-  - key: AWS_S3_REGION
-    scope: RUN_TIME
-    value: "us-west-2" 
+    scope: RUN_AND_BUILD_TIME
+    value: ${SYNC_SO_API_KEY} 
