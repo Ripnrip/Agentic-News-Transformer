@@ -10,6 +10,7 @@ from pydantic_ai import Agent, RunContext
 from langchain_cohere import CohereEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
+import asyncio
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -289,6 +290,38 @@ class DatabaseAgent:
     def __init__(self):
         _init_sqlite()
         self.vectorstore = vectorstore
+
+    def _parse_article(self, url: str) -> Optional[ArticleContent]:
+        """
+        Parse an article from a URL and return its content.
+        
+        Args:
+            url: URL of the article to parse
+            
+        Returns:
+            Optional[ArticleContent]: Parsed article content or None if parsing fails
+        """
+        try:
+            # Import here to avoid circular imports
+            from agents import NewsSearchAgent
+            
+            # Create a NewsSearchAgent instance
+            news_agent = NewsSearchAgent()
+            
+            # Parse the article using the NewsSearchAgent
+            parsed_content = asyncio.run(news_agent.parse_article(url))
+            
+            if parsed_content and isinstance(parsed_content, dict):
+                # Create an ArticleContent object from the parsed content
+                return ArticleContent(
+                    text=parsed_content.get('text', ''),
+                    html=parsed_content.get('html', ''),
+                    markdown=parsed_content.get('markdown', '')
+                )
+            return None
+        except Exception as e:
+            print(f"Error parsing article {url}: {str(e)}")
+            return None
 
     def store_article(self, article: ArticleContent) -> StoreResult:
         try:
