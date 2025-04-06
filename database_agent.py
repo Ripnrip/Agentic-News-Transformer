@@ -321,7 +321,7 @@ class DatabaseAgent:
             news_agent = NewsSearchAgent()
             
             # Parse the article using the NewsSearchAgent
-            parsed_content = _run_async(news_agent.parse_article(url))
+            parsed_content = news_agent.parse_article(url)
             
             if parsed_content and isinstance(parsed_content, dict):
                 # Create an ArticleContent object from the parsed content
