@@ -4,7 +4,7 @@ services:
   github:
     branch: gs-using-sync-so-api
     deploy_on_push: true
-    repo: VectorVerse-Evolve-Inc/Agentic-Content-Transformer
+    repo: Ripnrip/Agentic-News-Transformer
   build_command: pip install -r requirements.txt
   run_command: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
   http_port: 8501
