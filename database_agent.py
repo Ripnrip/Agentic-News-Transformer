@@ -1,5 +1,7 @@
 """Database agent for storing and retrieving news articles using Pydantic AI."""
-import sqlite3
+import sys
+import pysqlite3
+sys.modules["sqlite3"] = pysqlite3
 import hashlib
 import json
 import os
