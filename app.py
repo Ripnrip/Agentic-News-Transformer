@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import traceback
+import math
 
 # Helper function to reset session state
 def reset_session_state():
@@ -242,7 +243,7 @@ def generate_audio(script_text, audio_agent):
         st.error(f"Error generating audio: {str(e)}")
         return None
 
-def generate_avatar_video(audio_url, avatar_id=None, poll_for_completion=True, poll_interval=15, max_attempts=20):
+def generate_avatar_video(audio_url, avatar_id=None, poll_for_completion=True, poll_interval=15, max_attempts=20, indefinite_polling=True):
     """Generate avatar video from audio."""
     try:
         # Get video URL from avatar ID or use default
@@ -254,7 +255,8 @@ def generate_avatar_video(audio_url, avatar_id=None, poll_for_completion=True, p
             video_url=video_url,
             poll_for_completion=poll_for_completion,
             poll_interval=poll_interval,
-            max_attempts=max_attempts
+            max_attempts=max_attempts,
+            indefinite_polling=indefinite_polling
         )
         
         return video_result
@@ -634,7 +636,8 @@ def process_articles(articles, selected_voice="Rachel", use_avatar=False):
                             video_url=None,  # Use default video URL for the avatar
                             poll_for_completion=True,
                             poll_interval=15,
-                            max_attempts=20
+                            max_attempts=20,
+                            indefinite_polling=True
                         )
                         
                         # Check if the video generation was successful
@@ -666,12 +669,13 @@ def process_articles(articles, selected_voice="Rachel", use_avatar=False):
                             # Create progress bar
                             progress_bar = st.progress(0)
                             
-                            # Poll for job status updates without redirecting
-                            max_attempts = 40  # Increased for longer processing time
+                            # Poll for job status updates without redirecting - indefinitely
                             attempt = 0
-                            while attempt < max_attempts:
+                            while True:
                                 attempt += 1
-                                progress_value = min(0.9, attempt / max_attempts)
+                                # Use a logarithmic progress bar that approaches but never reaches 1.0
+                                # This shows activity without implying completion
+                                progress_value = min(0.9, 0.5 + (0.4 * math.log(attempt + 1) / math.log(100)))
                                 progress_bar.progress(progress_value)
                                 
                                 # Check status
@@ -738,10 +742,6 @@ def process_articles(articles, selected_voice="Rachel", use_avatar=False):
                                 
                                 # Wait before checking again
                                 time.sleep(15)
-                            
-                            # If we've reached max attempts but job isn't complete
-                            if attempt >= max_attempts and status not in ["COMPLETED", "FAILED", "REJECTED"]:
-                                status_container.info(f"Video is still processing after {max_attempts * 15} seconds. The job will continue in the background.\n\nJob ID: {video_result.job_id}\n\nYou can refresh the page later to check status.")
                     except Exception as e:
                         st.error(f"Error generating avatar video: {str(e)}")
                         print(f"📋 Traceback: {traceback.format_exc()}")
