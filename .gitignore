@@ -1,0 +1,68 @@
+# Generated directories
+generated_audio/
+generated_video/
+generated_videos/
+generated_content/
+
+# Environment variables and secrets
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.conda/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Temporary files
+*.tmp
+tmp/
+
+# Docker
+.docker/
+
+# AWS
+.aws/
+
+# Other
+node_modules/
+.cache/ 
