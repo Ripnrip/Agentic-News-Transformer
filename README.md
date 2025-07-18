@@ -6,9 +6,11 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
 
 - 📰 **News Scraping**: Scrape and parse news articles from any URL
 - 📝 **Content Generation**: Generate concise scripts from news content 
-- 🎙️ **Audio Generation**: Convert scripts to natural-sounding speech with ElevenLabs
+- 🎙️ **Audio Generation**: Convert scripts to natural-sounding speech with OpenAI TTS
 - 👤 **Avatar Animation**: Create lip-synced videos with Sync.so
 - 🔄 **Automatic Workflow**: Full pipeline from article URL to final video
+- 🗃️ **Offline RSS Pipeline**: Fetch 10 AI news articles, generate gTTS audio,
+  create simple videos, and optionally upload them to S3 using `offline_news_to_video.py`
 
 ## Architecture
 
@@ -18,12 +20,10 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
 
 - Python 3.10+
 - Docker and Docker Compose (for deployment)
-- API keys for:
-  - ElevenLabs
+ - API keys for:
   - Sync.so
   - OpenAI
   - AWS (for S3 storage)
-  - NewsDataHub (for news search)
   - Cohere (for vector storage)
 
 ## Quick Start
@@ -119,9 +119,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- ElevenLabs for the voice synthesis API
-- Sync.so for the avatar lip-syncing technology
-- OpenAI for the GPT-4 API used in content generation 
+  - Sync.so for the avatar lip-syncing technology
+  - OpenAI for the GPT-4 API used in content generation
 
 ## Application Interfaces
 
@@ -132,7 +131,7 @@ The system offers two different interfaces for different use cases:
 The main application provides a comprehensive pipeline for:
 - Processing news articles from URLs or pasted text
 - Generating AI-summarized content
-- Creating audio narrations with ElevenLabs voices
+ - Creating audio narrations with OpenAI voices
 - Optional avatar video generation
 - Social media distribution options
 
@@ -286,10 +285,10 @@ docker-compose -f deployment/docker-compose.yml up news-to-avatar
 
 ## Required API Keys
 
-The following API keys should be set in your environment variables:
-- `OPENAI_API_KEY`: For content generation
-- `ELEVENLABS_API_KEY`: For audio generation
+- The following API keys should be set in your environment variables:
+- `OPENAI_API_KEY`: For content and audio generation
 - `SYNC_SO_API_KEY`: For avatar video generation
+- Optional: `OPENAI_VOICE` to select a specific TTS voice
 - AWS credentials for S3 uploads
 
 ## Avatars

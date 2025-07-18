@@ -14,8 +14,11 @@ from dotenv import load_dotenv
 
 # Third-party imports
 import requests
+# Third-party imports
 from aiohttp.client_exceptions import ClientError
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+import feedparser
+from bs4 import BeautifulSoup
 # Commented out due to installation issues
 # from pygooglenews import GoogleNews
 from requests.exceptions import RequestException
@@ -651,6 +654,72 @@ class NewsSearchAgent:
             print(f"Error parsing NewsAPI response: {str(e)}")
             return []
 
+    def fetch_ai_news_from_rss(self, limit: int = 10) -> List[NewsArticle]:
+        """Fetch AI news articles from Google News RSS feed."""
+        rss_url = (
+            "https://news.google.com/rss/search?q=artificial+intelligence&hl=en-US&gl=US&ceid=US:en"
+        )
+        articles = []
+        try:
+            feed = feedparser.parse(rss_url)
+            for entry in feed.entries[:limit]:
+                pub_date = None
+                if getattr(entry, "published_parsed", None):
+                    pub_date = datetime(*entry.published_parsed[:6])
+                articles.append(
+                    NewsArticle(
+                        title=entry.get("title", "No Title"),
+                        link=entry.get("link", ""),
+                        content=entry.get("summary", ""),
+                        source="Google News RSS",
+                        source_type="google",
+                        published_date=pub_date,
+                        author=entry.get("author"),
+                    )
+                )
+            return articles
+        except Exception as e:
+            print(f"Error fetching RSS feed: {str(e)}")
+            return []
+
+    def fetch_ai_news_with_playwright(self, limit: int = 10) -> List[NewsArticle]:
+        """Scrape Google News search results using Playwright."""
+        search_url = (
+            "https://news.google.com/search?q=artificial+intelligence&hl=en-US&gl=US&ceid=US:en"
+        )
+        articles: List[NewsArticle] = []
+
+        async def _scrape():
+            browser_config = BrowserConfig(headless=True, verbose=False)
+            run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                result = await crawler.arun(url=search_url, config=run_config)
+                soup = BeautifulSoup(result.html or "", "html.parser")
+                for entry in soup.select("article")[:limit]:
+                    title_tag = entry.find("h3")
+                    link_tag = entry.find("a", href=True)
+                    if not title_tag or not link_tag:
+                        continue
+                    href = link_tag["href"]
+                    if href.startswith("./"):
+                        href = "https://news.google.com" + href[1:]
+                    articles.append(
+                        NewsArticle(
+                            title=title_tag.get_text(strip=True),
+                            link=href,
+                            content="",
+                            source="Google News",
+                            source_type="google",
+                        )
+                    )
+
+        try:
+            asyncio.run(_scrape())
+        except Exception as e:
+            print(f"Error scraping with Playwright: {str(e)}")
+
+        return articles
+
     def _save_to_cache(self, cache_file: str, data: Dict[str, Any]) -> None:
         """Save data to cache file.
         
@@ -797,91 +866,4 @@ class NewsAPIClient:
             return []
     
 
-class NewsDataHubClient:
-    """Client for interacting with NewsDataHub API."""
-    
-    def __init__(self):
-        """Initialize NewsDataHub client with API key from environment."""
-        load_dotenv()
-        self.api_key = os.getenv('NEWS_DATA_HUB_KEY')
-        if not self.api_key:
-            print("Warning: NEWS_DATA_HUB_KEY not found in environment variables")
-        else:
-            print(f"API Key found: {self.api_key[:5]}...")
-        self.base_url = "https://api.newsdatahub.com/v1"
-        
-    def fetch_ai_news(self, days_back: int = 7, limit: int = 10) -> List[NewsArticle]:
-        """Fetch AI-related news articles using NewsDataHub API."""
-        params = {
-            'q': 'artificial intelligence OR AI',
-            'language': 'en',
-            'limit': limit
-        }
-
-        try:
-            url = f"{self.base_url}/news"
-            print(f"Requesting from: {url}")
-            
-            headers = {
-                'X-Api-Key': self.api_key
-            }
-            
-            response = requests.get(
-                url,
-                params=params,
-                headers=headers,
-                timeout=15
-            )
-            
-            if response.status_code == 401:
-                print(f"Authentication failed. Please verify your API key.")
-                print(f"Response: {response.text}")
-                return []
-                
-            response.raise_for_status()
-            data = response.json()
-            
-            articles = []
-            for article in data.get('data', [])[:limit]:
-                # Create a structured content object
-                content = ArticleContent(
-                    text=article.get('content', ''),
-                    html=article.get('html', ''),
-                    markdown=article.get('markdown', '')
-                )
-
-                # Convert pub_date string to datetime
-                pub_date = None
-                if article.get('pub_date'):
-                    try:
-                        pub_date = datetime.fromisoformat(article['pub_date'])
-                    except ValueError:
-                        print(f"Could not parse date: {article['pub_date']}")
-
-                articles.append(NewsArticle(
-                    title=article.get('title', 'No Title'),
-                    link=article.get('article_link', 'No URL'),
-                    content=content,  # Pass the ArticleContent object
-                    source=article.get('source_title', 'Unknown'),
-                    source_type='newsdatahub',
-                    published_date=pub_date,
-                    author=article.get('creator'),
-                    image_url=article.get('media_url')
-                ))
-                
-                print(f"Found article: {article.get('title')} ({len(str(content))} chars)")
-                
-            print(f"\nTotal results available: {data.get('total_results', 0)}")
-            print(f"Results per page: {data.get('per_page', 0)}")
-            if data.get('next_cursor'):
-                print(f"Next cursor available: {data['next_cursor']}")
-                
-            return articles
-            
-        except RequestException as e:
-            print(f"Network error with NewsDataHub: {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error with NewsDataHub: {str(e)}")
-            return []
     

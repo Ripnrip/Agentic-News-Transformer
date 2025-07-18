@@ -9,7 +9,6 @@ import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 from langchain_cohere import CohereEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
@@ -56,13 +55,8 @@ class StoreResult(BaseModel):
     skipped_count: int
     errors: List[str] = Field(default_factory=list)
 
-# Create the agent
-db_agent = Agent(
-    "openai:gpt-4o",
-    deps_type=Any,
-    result_type=Any,
-    system_prompt="Manage database operations for storing and retrieving news articles."
-)
+# Previously used Pydantic AI Agent for database operations
+# This dependency has been removed to simplify installation
 
 # Default paths
 SQLITE_PATH = "news.db"
@@ -120,13 +114,11 @@ def _init_sqlite():
 # Initialize database
 _init_sqlite()
 
-@db_agent.tool
-def store_article(ctx: RunContext[Any], article: NewsArticle) -> str:
+def store_article(article: NewsArticle) -> str:
     """
     Store an article in both SQLite and vector store.
     
     Args:
-        ctx: Runtime context (not used)
         article: Article to store
         
     Returns:
@@ -201,13 +193,11 @@ def store_article(ctx: RunContext[Any], article: NewsArticle) -> str:
     conn.close()
     return article_id
 
-@db_agent.tool
-def search_similar(ctx: RunContext[Any], query: SearchQuery) -> List[SearchResult]:
+def search_similar(query: SearchQuery) -> List[SearchResult]:
     """
     Search for articles similar to the query text.
     
     Args:
-        ctx: Runtime context (not used)
         query: Search parameters
         
     Returns:
@@ -272,7 +262,7 @@ def store_articles(articles: List[NewsArticle]) -> StoreResult:
     
     for article in articles:
         try:
-            db_agent.run_sync("Store this article", deps=None, inputs={"article": article})
+            store_article(article)
             result.stored_count += 1
         except Exception as e:
             result.errors.append(f"Error storing {article.title}: {str(e)}")
@@ -283,11 +273,8 @@ def store_articles(articles: List[NewsArticle]) -> StoreResult:
 def search_similar_articles(query_text: str, limit: int = 5) -> List[SearchResult]:
     """Search for articles similar to the query text."""
     query = SearchQuery(query=query_text, limit=limit)
-    result = db_agent.run_sync("Find similar articles", deps=None, inputs={"query": query})
-    
-    if isinstance(result.data, list):
-        return result.data
-    return []
+    results = search_similar(query)
+    return results
 
 class DatabaseAgent:
     def __init__(self):
