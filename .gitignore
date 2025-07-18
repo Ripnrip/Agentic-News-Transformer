@@ -1,8 +1,8 @@
 # Generated directories
-generated_audio/
-generated_video/
-generated_videos/
-generated_content/
+#generated_audio/
+#generated_video/
+#generated_videos/
+#generated_content/
 
 # Environment variables and secrets
 .env
