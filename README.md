@@ -23,7 +23,6 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
   - Sync.so
   - OpenAI
   - AWS (for S3 storage)
-  - NewsDataHub (for news search)
   - Cohere (for vector storage)
 
 ## Quick Start

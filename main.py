@@ -1,4 +1,4 @@
-from agents import NewsSearchAgent, NewsAPIClient, NewsDataHubClient
+from agents import NewsSearchAgent, NewsAPIClient
 from NewsVectorStore import NewsVectorStore
 import os
 import json
@@ -45,29 +45,19 @@ def main():
 
     agent = NewsSearchAgent(article_limit=args.limit)
     
-    # Initialize clients
-    newsdatahub_client = NewsDataHubClient()
-    
-    # Check for API keys
-    newsdata_hub_key = os.getenv('NEWS_DATA_HUB_KEY')
-    if not newsdata_hub_key:
-        print("❌ NEWS_DATA_HUB_KEY not found in environment variables.")
+    # Initialize NewsAPI client
+    newsapi_client = NewsAPIClient()
+
+    if not newsapi_client.api_key:
+        print("❌ NEWS_API_KEY not found in environment variables.")
         return
-    
-    # Print partial API key for debugging
-    key_length = len(newsdata_hub_key)
-    masked_key = newsdata_hub_key[:4] + '*' * (key_length - 8) + newsdata_hub_key[-4:] if key_length > 8 else "too_short"
-    print(f"Using NewsDataHub API key: {masked_key}")
-    
-    # Fetch from sources
-    newsdatahub_articles = newsdatahub_client.fetch_ai_news(days_back=7, limit=5)
-    
-    # Combine results
-    all_articles = newsdatahub_articles
+
+    # Fetch from NewsAPI
+    all_articles = newsapi_client.fetch_ai_news(days_back=7, limit=args.limit)
 
     print(f"\nTotal Articles Found: {len(all_articles)}")
     print("\nArticle Sources:")
-    print(f"- NewsDataHub: {len(newsdatahub_articles)}")
+    print(f"- NewsAPI: {len(all_articles)}")
     
     if not all_articles:
         print("\nNo articles found. Please check your API key and try again.")
