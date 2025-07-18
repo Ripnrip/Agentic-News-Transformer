@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 import os
 import json
 import requests
+from dotenv import load_dotenv
+load_dotenv()
 from openai import OpenAI
 from datetime import datetime
 import boto3

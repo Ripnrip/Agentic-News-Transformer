@@ -6,6 +6,7 @@ from datetime import datetime
 import argparse
 from database_agent import DatabaseAgent
 from env_validator import validate_conda_env
+from dotenv import load_dotenv
 
 def log_article_details(articles, parsed_content):
     """Log detailed information about articles and their parsed content."""
@@ -34,6 +35,7 @@ def log_article_details(articles, parsed_content):
         print("-------------------\n")
 
 def main():
+    load_dotenv()
     # Validate conda environment
     validate_conda_env()
     

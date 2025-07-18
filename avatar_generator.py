@@ -9,6 +9,8 @@ import streamlit as st
 import boto3
 import json
 import urllib.parse
+from dotenv import load_dotenv
+load_dotenv()
 
 class VideoSettings(BaseModel):
     """Settings for video generation."""
@@ -670,11 +672,11 @@ class AvatarGenerationAgent:
                                 video_response = requests.get(output_url)
                                 if video_response.status_code == 200:
                                     # Create videos directory if it doesn't exist
-                                    os.makedirs("generated_videos", exist_ok=True)
-                                    
+                                    os.makedirs(self.videos_dir, exist_ok=True)
+
                                     # Save video locally
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    local_video_path = f"generated_videos/sync_video_{timestamp}.mp4"
+                                    local_video_path = os.path.join(self.videos_dir, f"sync_video_{timestamp}.mp4")
                                     with open(local_video_path, "wb") as f:
                                         f.write(video_response.content)
                                     
@@ -895,11 +897,11 @@ class AvatarGenerationAgent:
                                 video_response = requests.get(output_url)
                                 if video_response.status_code == 200:
                                     # Create videos directory if it doesn't exist
-                                    os.makedirs("generated_videos", exist_ok=True)
-                                    
+                                    os.makedirs(self.videos_dir, exist_ok=True)
+
                                     # Save video locally
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    local_video_path = f"generated_videos/sync_video_{timestamp}.mp4"
+                                    local_video_path = os.path.join(self.videos_dir, f"sync_video_{timestamp}.mp4")
                                     with open(local_video_path, "wb") as f:
                                         f.write(video_response.content)
                                     

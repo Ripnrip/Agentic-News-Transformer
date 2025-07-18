@@ -17,6 +17,7 @@ from avatar_generator import AvatarGenerationAgent
 from database_agent import DatabaseAgent
 
 def main():
+    load_dotenv()
     print("🚀 Starting Agentic Content Transformer pipeline...")
     
     # Step 1: Fetch news articles
