@@ -3,7 +3,7 @@
 Complete pipeline that:
 1. Fetches news articles using NewsAPI, Google RSS, or Playwright
 2. Generates a script from the first article
-3. Creates audio using ElevenLabs
+3. Creates audio using OpenAI TTS
 4. Produces a lip-synced video with Sync.so
 5. Uploads all assets to S3
 """
