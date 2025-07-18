@@ -32,8 +32,11 @@ if 'processed_urls' not in st.session_state:
 @st.cache_resource
 def init_agents():
     """Initialize all required agents."""
+    from database_agent import DatabaseAgent
+    
     news_agent = NewsSearchAgent(article_limit=1)  # We only need one article at a time
-    content_agent = ContentGenerationAgent()
+    db_agent = DatabaseAgent()
+    content_agent = ContentGenerationAgent(db_agent)
     audio_agent = AudioGenerationAgent()
     avatar_agent = AvatarGenerationAgent()
     return news_agent, content_agent, audio_agent, avatar_agent

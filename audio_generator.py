@@ -42,7 +42,9 @@ class AudioGenerationAgent:
         # Set up ElevenLabs API key
         self.api_key = os.getenv("ELEVENLABS_API_KEY")
         if not self.api_key:
-            raise ValueError("ELEVENLABS_API_KEY environment variable not set")
+            print("Warning: ELEVENLABS_API_KEY environment variable not set")
+            print("Audio generation functionality will be disabled")
+            self.api_key = None
         
         # API endpoints
         self.base_url = "https://api.elevenlabs.io/v1"

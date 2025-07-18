@@ -77,18 +77,24 @@ db_agent = Agent(
 SQLITE_PATH = "news.db"
 VECTOR_PATH = "vectorstore"
 
-# Initialize embeddings
-embeddings = CohereEmbeddings(
-    model="embed-english-v3.0",
-    cohere_api_key=os.getenv('COHERE_API_KEY'),
-    user_agent="Agentic-Content-Transformer/1.0"
-)
-
-# Initialize vector store
-vectorstore = Chroma(
-    persist_directory=VECTOR_PATH,
-    embedding_function=embeddings
-)
+# Initialize embeddings with error handling
+cohere_api_key = os.getenv('COHERE_API_KEY')
+if not cohere_api_key:
+    print("Warning: COHERE_API_KEY not found in environment variables")
+    print("Vector search functionality will be disabled")
+    embeddings = None
+    vectorstore = None
+else:
+    embeddings = CohereEmbeddings(
+        model="embed-english-v3.0",
+        cohere_api_key=cohere_api_key,
+        user_agent="Agentic-Content-Transformer/1.0"
+    )
+    # Initialize vector store
+    vectorstore = Chroma(
+        persist_directory=VECTOR_PATH,
+        embedding_function=embeddings
+    )
 
 # Initialize SQLite
 def _init_sqlite():
@@ -302,6 +308,8 @@ class DatabaseAgent:
     def __init__(self):
         _init_sqlite()
         self.vectorstore = vectorstore
+        if self.vectorstore is None:
+            print("Warning: DatabaseAgent initialized without vector store functionality")
 
     def _parse_article(self, url: str) -> Optional[ArticleContent]:
         """
@@ -346,17 +354,20 @@ class DatabaseAgent:
             conn.commit()
             conn.close()
 
-            # Store in vector database
-            self.vectorstore.add_texts(
-                texts=[article.text],
-                metadatas=[{
-                    'title': article.title,
-                    'url': article.url,
-                    'source': article.source,
-                    'published_date': article.published_date
-                }]
-            )
-            self.vectorstore.persist()
+            # Store in vector database if available
+            if self.vectorstore is not None:
+                self.vectorstore.add_texts(
+                    texts=[article.text],
+                    metadatas=[{
+                        'title': article.title,
+                        'url': article.url,
+                        'source': article.source,
+                        'published_date': article.published_date
+                    }]
+                )
+                self.vectorstore.persist()
+            else:
+                print("Warning: Skipping vector store - COHERE_API_KEY not configured")
 
             return StoreResult(stored_count=1, skipped_count=0)
         except Exception as e:
@@ -371,6 +382,10 @@ class DatabaseAgent:
         return results
 
     def search_articles(self, query: SearchQuery) -> List[SearchResult]:
+        if self.vectorstore is None:
+            print("Warning: Vector search not available - COHERE_API_KEY not configured")
+            return []
+        
         try:
             results = self.vectorstore.similarity_search_with_score(
                 query.query,
