@@ -1,7 +1,6 @@
 """Agent for generating accessible and inclusive tech content using Pydantic AI."""
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 import os
 import json
 from datetime import datetime
@@ -55,13 +54,6 @@ class ContentGenerationAgent:
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.db_agent = db_agent # Store the database agent
         
-        # Create the agent
-        self.agent = Agent(
-            "openai:gpt-4",  # Using OpenAI for content generation
-            deps_type=dict,  # Article request will be passed as dependency
-            result_type=ArticleResult,
-            system_prompt="Generate engaging and informative articles on various topics."
-        )
 
     def generate_article_content(self, request: ArticleRequest) -> ArticleResult:
         """Generate article content based on the request."""

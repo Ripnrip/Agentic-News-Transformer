@@ -1,9 +1,11 @@
-"""Agent for generating audio content using ElevenLabs."""
+"""Agent for generating audio content using OpenAI text-to-speech."""
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 import os
 import json
 import requests
+from dotenv import load_dotenv
+load_dotenv()
+from openai import OpenAI
 from datetime import datetime
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
@@ -85,7 +87,7 @@ class AudioRequest(BaseModel):
     """Request for generating audio."""
     text: str = Field(..., description="Text to convert to audio")
     title: str = Field(default=None, description="Title for the audio file (will be used as base filename)")
-    voice_id: str = Field(default=None, description="ElevenLabs voice ID to use")
+    voice_id: str = Field(default=None, description="Voice name for OpenAI TTS")
     output_dir: str = Field(default="audio", description="Directory to save output files")
     subtitle_options: SubtitleOptions = Field(default=None, description="Options for subtitle generation")
     upload_to_s3: bool = Field(default=True, description="Whether to upload the audio file to S3")
@@ -111,30 +113,18 @@ class AudioGenerationAgent:
     
     def __init__(self):
         """Initialize the audio generation agent."""
-        # Set up ElevenLabs API key
-        self.api_key = os.getenv("ELEVENLABS_API_KEY")
-        if not self.api_key:
-            raise ValueError("ELEVENLABS_API_KEY environment variable not set")
-        
-        # Set default voice ID from environment variable or use Rachel as fallback
-        self.voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Default to Rachel voice
-        print(f"Initializing AudioGenerationAgent with voice_id: {self.voice_id}")
-        
-        # API endpoints
-        self.base_url = "https://api.elevenlabs.io/v1"
+        # Initialize OpenAI client for TTS
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        # Default female voice for TTS
+        self.voice_id = os.getenv("OPENAI_VOICE", "nova")
+        print(f"Initializing AudioGenerationAgent with OpenAI voice: {self.voice_id}")
         
         # S3 configuration
         self.s3_region = os.getenv("AWS_S3_REGION", "us-west-2")
         self.s3_bucket = os.getenv("AWS_S3_BUCKET", "vectorverseevolve")
         self.s3_folder = None
         
-        # Create the agent
-        self.agent = Agent(
-            "openai:gpt-4",  # Using OpenAI for script processing
-            deps_type=dict,  # Audio request will be passed as dependency
-            result_type=AudioResult,
-            system_prompt="Generate audio content and subtitles from text."
-        )
 
     def _upload_to_s3(self, file_path, s3_key=None):
         """Upload a file to S3.
@@ -226,11 +216,11 @@ class AudioGenerationAgent:
             with open(script_file, 'w') as f:
                 f.write(request.text)
                 
-            # Generate audio using ElevenLabs
-            st.write("Generating audio with ElevenLabs...")
-            audio_bytes = self._generate_audio_with_elevenlabs(
+            # Generate audio using OpenAI TTS
+            st.write("Generating audio with OpenAI TTS...")
+            audio_bytes = self._generate_audio_with_openai(
                 text=request.text,
-                voice_id=request.voice_id
+                voice_id=request.voice_id or self.voice_id
             )
             
             # Save audio to file
@@ -382,34 +372,19 @@ class AudioGenerationAgent:
         seconds = int(seconds)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
-    def _generate_audio_with_elevenlabs(self, text: str, voice_id: str) -> bytes:
-        """Generate audio using ElevenLabs API."""
-        url = f"{self.base_url}/text-to-speech/{voice_id}"
-        
-        headers = {
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": self.api_key
-        }
-        
-        data = {
-            "text": text,
-            "model_id": "eleven_monolingual_v1",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.0,
-                "use_speaker_boost": True
-            }
-        }
-        
-        response = requests.post(url, json=data, headers=headers)
-        
-        if response.status_code == 200:
+    def _generate_audio_with_openai(self, text: str, voice_id: str) -> bytes:
+        """Generate audio using OpenAI's text-to-speech API."""
+        try:
+            response = self.client.audio.speech.create(
+                input=text,
+                model="tts-1",
+                voice=voice_id,
+                response_format="mp3",
+            )
             return response.content
-        else:
-            st.error(f"ElevenLabs API error: {response.status_code} - {response.text}")
-            raise Exception(f"ElevenLabs API error: {response.status_code} - {response.text}")
+        except Exception as e:
+            st.error(f"OpenAI TTS error: {str(e)}")
+            raise
             
     def _get_audio_duration(self, audio_file: str) -> float:
         """Get the duration of an audio file in seconds."""
