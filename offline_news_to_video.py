@@ -55,9 +55,8 @@ def main():
         print("No articles found")
         return
     for i, article in enumerate(articles, 1):
-        print(f"Creating video {i}/{len(articles)}: {article.get('title')}")
-        video_path = generate_video(article, out_dir)
-        print(f"Saved: {video_path}")
+        print(f"Creating video {i}/{{len(articles)}}: {article.get('title')}")
+        generate_video(article, out_dir)
     print(f"Videos saved to {out_dir}")
 
 
