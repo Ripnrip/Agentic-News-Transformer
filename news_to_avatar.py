@@ -237,7 +237,7 @@ def generate_script(article_content, content_agent):
         return None
 
 def generate_audio(script, audio_agent):
-    """Generate audio from script using ElevenLabs."""
+    """Generate audio from script using OpenAI TTS."""
     try:
         st.write("Generating audio from script...")
         
