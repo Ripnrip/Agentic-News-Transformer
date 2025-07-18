@@ -14,6 +14,7 @@ from avatar_generator import AvatarGenerationAgent
 load_dotenv()
 
 
+
 def sanitize_filename(name: str) -> str:
     return ''.join(c if c.isalnum() or c in ('_', '-') else '_' for c in name)[:50]
 
@@ -62,6 +63,7 @@ def generate_video(article, out_dir: str):
         return os.path.join(out_dir, local_files[-1])
 
     return None
+
 
 
 def main():
