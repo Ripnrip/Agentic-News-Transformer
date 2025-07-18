@@ -5,6 +5,7 @@ from datetime import datetime
 import feedparser
 from gtts import gTTS
 from moviepy import TextClip, AudioFileClip
+from audio_generator import upload_file_to_s3
 
 
 def sanitize_filename(name: str) -> str:
@@ -35,6 +36,14 @@ def generate_video(article, out_dir: str):
     clip = TextClip(text=title, font_size=50, color='white', bg_color='black', size=(640, 480))
     video = clip.with_audio(audio).with_duration(audio.duration)
     video.write_videofile(video_path, fps=24, logger=None)
+
+    # Upload to S3 if credentials are provided
+    s3_url = None
+    if os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"):
+        s3_url = upload_file_to_s3(video_path)
+        if s3_url:
+            print(f"Uploaded to S3: {s3_url}")
+
     return video_path
 
 

@@ -4,7 +4,6 @@ import time
 from typing import Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 import requests
 import streamlit as st
 import boto3

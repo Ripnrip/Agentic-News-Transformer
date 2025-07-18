@@ -9,6 +9,8 @@ An AI-powered pipeline that converts news articles into lip-synced avatar videos
 - 🎙️ **Audio Generation**: Convert scripts to natural-sounding speech with OpenAI TTS
 - 👤 **Avatar Animation**: Create lip-synced videos with Sync.so
 - 🔄 **Automatic Workflow**: Full pipeline from article URL to final video
+- 🗃️ **Offline RSS Pipeline**: Fetch 10 AI news articles, generate gTTS audio,
+  create simple videos, and optionally upload them to S3 using `offline_news_to_video.py`
 
 ## Architecture
 

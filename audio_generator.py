@@ -1,6 +1,5 @@
 """Agent for generating audio content using OpenAI text-to-speech."""
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 import os
 import json
 import requests
@@ -124,13 +123,6 @@ class AudioGenerationAgent:
         self.s3_bucket = os.getenv("AWS_S3_BUCKET", "vectorverseevolve")
         self.s3_folder = None
         
-        # Create the agent
-        self.agent = Agent(
-            "openai:gpt-4",  # Using OpenAI for script processing
-            deps_type=dict,  # Audio request will be passed as dependency
-            result_type=AudioResult,
-            system_prompt="Generate audio content and subtitles from text."
-        )
 
     def _upload_to_s3(self, file_path, s3_key=None):
         """Upload a file to S3.

@@ -21,7 +21,6 @@ cohere>=5.12.0,<6.0
 tiktoken>=0.9.0
 groq>=0.20.0
 mistralai>=1.6.0
-pydantic_ai==0.0.53
 
 # Text processing
 beautifulsoup4>=4.12.2
