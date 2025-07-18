@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 Complete pipeline that:
-1. Fetches news articles using NewsDataHub
+1. Fetches news articles using NewsAPI, Google RSS, or Playwright
 2. Generates a script from the first article
-3. Creates audio using ElevenLabs
+3. Creates audio using OpenAI TTS
 4. Produces a lip-synced video with Sync.so
 5. Uploads all assets to S3
 """
 import os
 import json
 import time
-from agents import NewsSearchAgent, NewsAPIClient, NewsDataHubClient
+from agents import NewsSearchAgent, NewsAPIClient
 from content_generator import ContentGenerationAgent, ArticleRequest
 from audio_generator import AudioGenerationAgent, AudioRequest
 from avatar_generator import AvatarGenerationAgent
@@ -22,9 +22,23 @@ def main():
     # Step 1: Fetch news articles
     print("\n📰 Step 1: Fetching news articles...")
     agent = NewsSearchAgent(article_limit=5)
-    newsdata_hub_client = NewsDataHubClient()
-    articles = newsdata_hub_client.fetch_ai_news(days_back=7, limit=5)
-    
+    articles = []
+
+    # Try NewsAPI first if an API key is available
+    newsapi_client = NewsAPIClient()
+    if newsapi_client.api_key:
+        articles = newsapi_client.fetch_ai_news(days_back=7, limit=5)
+
+    # Fallback to RSS feed if NewsAPI fails or returns nothing
+    if not articles:
+        print("⚠️ NewsAPI unavailable. Using Google RSS feed...")
+        articles = agent.fetch_ai_news_from_rss(limit=5)
+
+    # Final fallback to Playwright scraping
+    if not articles:
+        print("⚠️ RSS feed failed. Trying Playwright scraping...")
+        articles = agent.fetch_ai_news_with_playwright(limit=5)
+
     if not articles:
         print("❌ No articles found. Exiting.")
         return

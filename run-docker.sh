@@ -25,12 +25,8 @@ else
 fi
 
 # Set environment variables placeholders - use your own keys in production
-if [ -z "$ELEVENLABS_API_KEY" ]; then
-  export ELEVENLABS_API_KEY="placeholder_key"
-fi
-
-if [ -z "$ELEVENLABS_VOICE_ID" ]; then
-  export ELEVENLABS_VOICE_ID="placeholder_id"
+if [ -z "$OPENAI_VOICE" ]; then
+  export OPENAI_VOICE="nova"
 fi
 
 if [ -z "$SYNC_SO_API_KEY" ]; then
@@ -73,8 +69,7 @@ docker run -it --rm \
   -e PORT=8080 \
   -e STREAMLIT_SERVER_PORT=8080 \
   -e OPENAI_API_KEY="$OPENAI_API_KEY" \
-  -e ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" \
-  -e ELEVENLABS_VOICE_ID="$ELEVENLABS_VOICE_ID" \
+  -e OPENAI_VOICE="$OPENAI_VOICE" \
   -e SYNC_SO_API_KEY="$SYNC_SO_API_KEY" \
   -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
   -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \

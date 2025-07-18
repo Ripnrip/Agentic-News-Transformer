@@ -65,4 +65,6 @@ tmp/
 
 # Other
 node_modules/
-.cache/ 
+.cache/
+
+output/
