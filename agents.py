@@ -14,8 +14,11 @@ from dotenv import load_dotenv
 
 # Third-party imports
 import requests
+# Third-party imports
 from aiohttp.client_exceptions import ClientError
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+import feedparser
+from bs4 import BeautifulSoup
 # Commented out due to installation issues
 # from pygooglenews import GoogleNews
 from requests.exceptions import RequestException
@@ -207,7 +210,7 @@ class NewsSearchAgent:
 
     @staticmethod
     async def parse_article(url: str):
-        """Parse a single article URL using Crawl4AI."""
+        """Parse a single article URL using Crawl4AI with fallbacks to BeautifulSoup and OpenAI."""
         print(f"\nParsing article from: {url}")
         
         # Skip if it's a Google News URL
@@ -220,94 +223,90 @@ class NewsSearchAgent:
                 "error": "Need actual article URL"
             }
 
-        browser_config = BrowserConfig(
-            headless=True,  # Set to True for container environments
-            verbose=True,
-            # Remove unsupported direct arguments
-        )
-
-        # Create a custom config for the crawler
-        config = {
-            "wait_until": "networkidle0",
-            "timeout": 30000,
-            "initial_delay": 3000,
-            "retry_delay": 1000,
-            "max_retries": 3,
-            "dynamic_wait": True,
-            # Add browser settings here instead
-            "browser_settings": {
-                "window_size": (1920, 1080),
-                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                "args": [
-                    '--disable-blink-features=AutomationControlled',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-infobars',
-                    '--window-position=0,0',
-                    '--ignore-certifcate-errors',
-                    '--ignore-certifcate-errors-spki-list',
-                    '--disable-dev-shm-usage',
-                    '--headless=new'  # Add headless mode for container environments
-                ]
-            },
-            "selectors": {
-                "article": "article, .article, .post-content, .entry-content, main",
-                "title": "h1, .article-title, .entry-title",
-                "content": "article p, .article-content p, .post-content p, .entry-content p",
-                "body": "article, .article-body, .post-content, .entry-content"  # Added body selector
-            },
-            "remove_selectors": [
-                "script",
-                "style",
-                "link[rel='stylesheet']",
-                "noscript",
-                "iframe",
-                ".advertisement",
-                ".social-share",
-                ".related-articles",
-                ".comments",
-                ".sidebar",
-                "nav",
-                "header:not(h1, h2, h3, h4, h5, h6)",
-                "footer",
-                "[class*='cookie']",
-                "[class*='popup']",
-                "[class*='banner']",
-                # Additional cleanup for body content
-                "[class*='share']",
-                "[class*='newsletter']",
-                "[class*='subscription']",
-                "[class*='widget']",
-                "[class*='meta']",
-                "[class*='author']",
-                "[class*='timestamp']",
-                "[class*='date']"
-            ],
-            "keep_selectors": [
-                "title",
-                "meta[name='description']",
-                "article",
-                "h1, h2, h3, h4, h5, h6",
-                "p",
-                "a[href]",  # Keep links
-                "img[alt]",  # Keep images with alt text
-                "blockquote"
-            ],
-            # Add content cleaning rules
-            "clean_content": {
-                "remove_empty_elements": True,
-                "unwrap_single_tags": True,
-                "preserve_links": True,
-                "strip_comments": True,
-                "minimal_formatting": True
-            }
-        }
-
-        run_config = CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS
-        )
-        
+        # Step 1: Try with Crawl4AI first
         try:
+            browser_config = BrowserConfig(
+                headless=True,  # Set to True for headless mode to avoid UI issues
+                verbose=True,
+            )
+
+            # Create a custom config for the crawler
+            config = {
+                "wait_until": "networkidle0",
+                "timeout": 30000,
+                "initial_delay": 3000,
+                "retry_delay": 1000,
+                "max_retries": 3,
+                "dynamic_wait": True,
+                "browser_settings": {
+                    "window_size": (1920, 1080),
+                    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "args": [
+                        '--disable-blink-features=AutomationControlled',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-infobars',
+                        '--window-position=0,0',
+                        '--ignore-certifcate-errors',
+                        '--ignore-certifcate-errors-spki-list',
+                        '--disable-dev-shm-usage'
+                    ]
+                },
+                "selectors": {
+                    "article": "article, .article, .post-content, .entry-content, main",
+                    "title": "h1, .article-title, .entry-title",
+                    "content": "article p, .article-content p, .post-content p, .entry-content p",
+                    "body": "article, .article-body, .post-content, .entry-content"
+                },
+                "remove_selectors": [
+                    "script",
+                    "style",
+                    "link[rel='stylesheet']",
+                    "noscript",
+                    "iframe",
+                    ".advertisement",
+                    ".social-share",
+                    ".related-articles",
+                    ".comments",
+                    ".sidebar",
+                    "nav",
+                    "header:not(h1, h2, h3, h4, h5, h6)",
+                    "footer",
+                    "[class*='cookie']",
+                    "[class*='popup']",
+                    "[class*='banner']",
+                    "[class*='share']",
+                    "[class*='newsletter']",
+                    "[class*='subscription']",
+                    "[class*='widget']",
+                    "[class*='meta']",
+                    "[class*='author']",
+                    "[class*='timestamp']",
+                    "[class*='date']"
+                ],
+                "keep_selectors": [
+                    "title",
+                    "meta[name='description']",
+                    "article",
+                    "h1, h2, h3, h4, h5, h6",
+                    "p",
+                    "a[href]",
+                    "img[alt]",
+                    "blockquote"
+                ],
+                "clean_content": {
+                    "remove_empty_elements": True,
+                    "unwrap_single_tags": True,
+                    "preserve_links": True,
+                    "strip_comments": True,
+                    "minimal_formatting": True
+                }
+            }
+
+            run_config = CrawlerRunConfig(
+                cache_mode=CacheMode.BYPASS
+            )
+            
             async with AsyncWebCrawler(config=browser_config) as crawler:
                 result = await crawler.arun(
                     url=url,
@@ -336,64 +335,144 @@ class NewsSearchAgent:
                 content = {
                     "markdown": result.markdown if hasattr(result, 'markdown') else None,
                     "html": cleaned_html,
-                    "text": clean_text,  # Add the clean text content
+                    "text": clean_text,
                     "body_content": body_content
                 }
                 
-                # Check if we have any valid content
-                if (not content["markdown"] or content["markdown"] == "\n") and not content["html"]:
-                    print(f"Warning: No content extracted from {url}, retrying with delay...")
+                # Check if we have valid content
+                if content["text"] and len(content["text"]) > 100:
+                    print("Successfully parsed with Crawl4AI")
+                    # Ensure null values are replaced with empty strings
+                    content["markdown"] = content["markdown"] if content["markdown"] is not None else ""
+                    content["html"] = content["html"] if content["html"] is not None else ""
+                    content["text"] = content["text"] if content["text"] is not None else ""
+                    return content
                     
-                    # Retry with explicit delay
-                    await asyncio.sleep(3)  # Wait 3 seconds
-                    result = await crawler.arun(
-                        url=url,
-                        config=run_config,
-                        custom_config=config
-                    )
-                    
-                    content = {
-                        "markdown": result.markdown if hasattr(result, 'markdown') else None,
-                        "html": result.html if hasattr(result, 'html') else None,
-                        "text": result.text if hasattr(result, 'text') else None,
-                        "body_content": body_content
-                    }
+                print("Crawl4AI returned insufficient content, trying fallbacks...")
                 
-                # Final check for content
-                if (not content["markdown"] or content["markdown"] == "\n") and not content["html"]:
-                    return {
-                        "markdown": None,
-                        "html": None,
-                        "text": f"Failed to extract content from {url}. The site might be blocking automated access.",
-                        "error": "No content extracted"
-                    }
-                    
-                return content
-                
-        except (RuntimeError, ClientError) as e:
+        except Exception as e:
             print(f"Crawler error for {url}: {str(e)}")
-            return {
-                "markdown": None,
-                "html": None,
-                "text": f"Crawler error: {str(e)}",
-                "error": str(e)
+
+        # Step 2: Fallback to BeautifulSoup
+        try:
+            print("Trying BeautifulSoup fallback...")
+            from bs4 import BeautifulSoup
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
             }
-        except AsyncTimeoutError as e:
-            print(f"Timeout error for {url}: {str(e)}")
-            return {
-                "markdown": None,
-                "html": None,
-                "text": f"Timeout error: {str(e)}",
-                "error": str(e)
-            }
-        except ValueError as e:
-            print(f"Value error for {url}: {str(e)}")
-            return {
-                "markdown": None,
-                "html": None,
-                "text": f"Value error: {str(e)}",
-                "error": str(e)
-            }
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove unwanted elements
+            for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+                tag.decompose()
+                
+            # Find title
+            title_elem = soup.find('h1') or soup.find('title')
+            title = title_elem.text.strip() if title_elem else "Unknown Title"
+            
+            # Try different content selectors
+            content_selectors = [
+                'article', '.article', '.post-content', '.entry-content', '.content', 'main',
+                '.article-body', '[itemprop="articleBody"]'
+            ]
+            
+            content_elem = None
+            for selector in content_selectors:
+                content_elem = soup.select_one(selector)
+                if content_elem:
+                    break
+                    
+            if not content_elem:
+                content_elem = soup
+                
+            # Extract paragraphs from content
+            paragraphs = content_elem.find_all('p')
+            text = '\n\n'.join([p.text.strip() for p in paragraphs if len(p.text.strip()) > 20])
+            
+            if text and len(text) > 100:
+                print("Successfully parsed with BeautifulSoup")
+                return {
+                    "markdown": "",  # Empty string instead of None
+                    "html": str(content_elem) if content_elem else "",
+                    "text": text,
+                    "body_content": str(content_elem) if content_elem else ""
+                }
+                
+            print("BeautifulSoup returned insufficient content, trying OpenAI...")
+                
+        except Exception as e:
+            print(f"BeautifulSoup fallback error for {url}: {str(e)}")
+
+        # Step 3: Final fallback to OpenAI
+        try:
+            print("Trying OpenAI fallback...")
+            from openai import OpenAI
+            
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            
+            prompt = f"""
+            I need you to extract the main content from this news article URL: {url}
+            
+            The user's browser is having trouble parsing it directly, so please:
+            1. Extract the title
+            2. Extract the main article text
+            3. Format your response as a JSON object with "title" and "text" fields
+            
+            Only return the JSON object without any introduction or conclusion.
+            """
+            
+            response = client.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a web content extraction assistant. You help extract article content from URLs that failed to parse."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2000
+            )
+            
+            ai_response = response.choices[0].message.content
+            
+            # Extract JSON from response
+            import json
+            try:
+                # Try to parse if it's clean JSON
+                ai_content = json.loads(ai_response)
+            except:
+                # If not, try to extract JSON using regex
+                json_match = re.search(r'(\{.*\})', ai_response, re.DOTALL)
+                if json_match:
+                    try:
+                        ai_content = json.loads(json_match.group(1))
+                    except:
+                        ai_content = {"title": "Extraction Failed", "text": "Could not parse article content."}
+                else:
+                    ai_content = {"title": "Extraction Failed", "text": "Could not parse article content."}
+            
+            if "text" in ai_content and len(ai_content["text"]) > 100:
+                print("Successfully parsed with OpenAI")
+                return {
+                    "markdown": "",  # Empty string instead of None
+                    "html": "",  # Empty string instead of None
+                    "text": ai_content["text"],
+                    "title": ai_content.get("title", "Unknown Title")
+                }
+        
+        except Exception as e:
+            print(f"OpenAI fallback error for {url}: {str(e)}")
+        
+        # If all fallbacks fail
+        print("All parsing methods failed")
+        return {
+            "markdown": "",  # Empty string instead of None
+            "html": "",  # Empty string instead of None
+            "text": f"Failed to extract content from {url} using all available methods.",
+            "error": "All parsing methods failed"
+        }
 
     async def parse_articles_batch(self, articles: List[NewsArticle], timeout_minutes: int = 15):
         """Parse multiple articles concurrently with timeout."""
@@ -575,6 +654,72 @@ class NewsSearchAgent:
             print(f"Error parsing NewsAPI response: {str(e)}")
             return []
 
+    def fetch_ai_news_from_rss(self, limit: int = 10) -> List[NewsArticle]:
+        """Fetch AI news articles from Google News RSS feed."""
+        rss_url = (
+            "https://news.google.com/rss/search?q=artificial+intelligence&hl=en-US&gl=US&ceid=US:en"
+        )
+        articles = []
+        try:
+            feed = feedparser.parse(rss_url)
+            for entry in feed.entries[:limit]:
+                pub_date = None
+                if getattr(entry, "published_parsed", None):
+                    pub_date = datetime(*entry.published_parsed[:6])
+                articles.append(
+                    NewsArticle(
+                        title=entry.get("title", "No Title"),
+                        link=entry.get("link", ""),
+                        content=entry.get("summary", ""),
+                        source="Google News RSS",
+                        source_type="google",
+                        published_date=pub_date,
+                        author=entry.get("author"),
+                    )
+                )
+            return articles
+        except Exception as e:
+            print(f"Error fetching RSS feed: {str(e)}")
+            return []
+
+    def fetch_ai_news_with_playwright(self, limit: int = 10) -> List[NewsArticle]:
+        """Scrape Google News search results using Playwright."""
+        search_url = (
+            "https://news.google.com/search?q=artificial+intelligence&hl=en-US&gl=US&ceid=US:en"
+        )
+        articles: List[NewsArticle] = []
+
+        async def _scrape():
+            browser_config = BrowserConfig(headless=True, verbose=False)
+            run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                result = await crawler.arun(url=search_url, config=run_config)
+                soup = BeautifulSoup(result.html or "", "html.parser")
+                for entry in soup.select("article")[:limit]:
+                    title_tag = entry.find("h3")
+                    link_tag = entry.find("a", href=True)
+                    if not title_tag or not link_tag:
+                        continue
+                    href = link_tag["href"]
+                    if href.startswith("./"):
+                        href = "https://news.google.com" + href[1:]
+                    articles.append(
+                        NewsArticle(
+                            title=title_tag.get_text(strip=True),
+                            link=href,
+                            content="",
+                            source="Google News",
+                            source_type="google",
+                        )
+                    )
+
+        try:
+            asyncio.run(_scrape())
+        except Exception as e:
+            print(f"Error scraping with Playwright: {str(e)}")
+
+        return articles
+
     def _save_to_cache(self, cache_file: str, data: Dict[str, Any]) -> None:
         """Save data to cache file.
         
@@ -721,91 +866,4 @@ class NewsAPIClient:
             return []
     
 
-class NewsDataHubClient:
-    """Client for interacting with NewsDataHub API."""
-    
-    def __init__(self):
-        """Initialize NewsDataHub client with API key from environment."""
-        load_dotenv()
-        self.api_key = os.getenv('NEWS_DATA_HUB_KEY')
-        if not self.api_key:
-            print("Warning: NEWS_DATA_HUB_KEY not found in environment variables")
-        else:
-            print(f"API Key found: {self.api_key[:5]}...")
-        self.base_url = "https://api.newsdatahub.com/v1"
-        
-    def fetch_ai_news(self, days_back: int = 7, limit: int = 10) -> List[NewsArticle]:
-        """Fetch AI-related news articles using NewsDataHub API."""
-        params = {
-            'q': 'artificial intelligence OR AI',
-            'language': 'en',
-            'limit': limit
-        }
-
-        try:
-            url = f"{self.base_url}/news"
-            print(f"Requesting from: {url}")
-            
-            headers = {
-                'X-Api-Key': self.api_key
-            }
-            
-            response = requests.get(
-                url,
-                params=params,
-                headers=headers,
-                timeout=15
-            )
-            
-            if response.status_code == 401:
-                print(f"Authentication failed. Please verify your API key.")
-                print(f"Response: {response.text}")
-                return []
-                
-            response.raise_for_status()
-            data = response.json()
-            
-            articles = []
-            for article in data.get('data', [])[:limit]:
-                # Create a structured content object
-                content = ArticleContent(
-                    text=article.get('content', ''),
-                    html=article.get('html', ''),
-                    markdown=article.get('markdown', '')
-                )
-
-                # Convert pub_date string to datetime
-                pub_date = None
-                if article.get('pub_date'):
-                    try:
-                        pub_date = datetime.fromisoformat(article['pub_date'])
-                    except ValueError:
-                        print(f"Could not parse date: {article['pub_date']}")
-
-                articles.append(NewsArticle(
-                    title=article.get('title', 'No Title'),
-                    link=article.get('article_link', 'No URL'),
-                    content=content,  # Pass the ArticleContent object
-                    source=article.get('source_title', 'Unknown'),
-                    source_type='newsdatahub',
-                    published_date=pub_date,
-                    author=article.get('creator'),
-                    image_url=article.get('media_url')
-                ))
-                
-                print(f"Found article: {article.get('title')} ({len(str(content))} chars)")
-                
-            print(f"\nTotal results available: {data.get('total_results', 0)}")
-            print(f"Results per page: {data.get('per_page', 0)}")
-            if data.get('next_cursor'):
-                print(f"Next cursor available: {data['next_cursor']}")
-                
-            return articles
-            
-        except RequestException as e:
-            print(f"Network error with NewsDataHub: {str(e)}")
-            return []
-        except Exception as e:
-            print(f"Error with NewsDataHub: {str(e)}")
-            return []
     

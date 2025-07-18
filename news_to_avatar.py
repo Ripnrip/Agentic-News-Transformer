@@ -118,7 +118,7 @@ def generate_audio(script, audio_agent):
         request = AudioRequest(
             text=script,
             title="News Script",
-            voice_id="21m00Tcm4TlvDq8ikWAM",  # Default voice ID
+            voice="nova",  # Default OpenAI voice
             output_dir="generated_audio",
             upload_to_s3=True,  # Enable S3 upload
             s3_bucket="vectorverseevolve",
